@@ -174,6 +174,7 @@ type ChartOptions struct {
 	FixedMin   *float64
 	FixedMax   *float64
 	TimeWindow string
+	Window     int // samples spanning the width (default 60)
 }
 
 // RenderTimeSeriesChart renders a single-series btop-style graph with area fill and guide lines
@@ -232,8 +233,8 @@ func RenderTimeSeriesChart(values []float64, opt ChartOptions) string {
 
 	if len(values) > 0 {
 		data := values
-		if len(data) > dotsW {
-			data = data[len(data)-dotsW:]
+		if len(data) > opt.window() {
+			data = data[len(data)-opt.window():]
 		}
 
 		span := displayMax - displayMin
@@ -244,13 +245,8 @@ func RenderTimeSeriesChart(values []float64, opt ChartOptions) string {
 		prevX := -1
 		prevY := -1
 
-		startX := dotsW - len(data)
-		if startX < 0 {
-			startX = 0
-		}
-
 		for i, v := range data {
-			x := startX + i
+			x := sampleX(i, len(data), opt.window(), dotsW)
 			norm := (v - displayMin) / span
 			if norm < 0 {
 				norm = 0
@@ -511,6 +507,7 @@ type DualChartOptions struct {
 	FixedMin   *float64
 	FixedMax   *float64
 	TimeWindow string
+	Window     int // samples spanning the width (default 60)
 	Series0    SeriesData
 	Series1    SeriesData
 }
@@ -587,16 +584,12 @@ func RenderDualTimeSeriesChart(opt DualChartOptions) string {
 	// Plot Series 0 (Area fill + Ridge line)
 	if len(opt.Series0.Values) > 0 {
 		data0 := opt.Series0.Values
-		if len(data0) > dotsW {
-			data0 = data0[len(data0)-dotsW:]
-		}
-		startX := dotsW - len(data0)
-		if startX < 0 {
-			startX = 0
+		if len(data0) > opt.window() {
+			data0 = data0[len(data0)-opt.window():]
 		}
 		prevX, prevY := -1, -1
 		for i, v := range data0 {
-			x := startX + i
+			x := sampleX(i, len(data0), opt.window(), dotsW)
 			norm := (v - displayMin) / span
 			if norm < 0 {
 				norm = 0
@@ -623,16 +616,12 @@ func RenderDualTimeSeriesChart(opt DualChartOptions) string {
 	// Plot Series 1 (Area fill + Ridge line)
 	if len(opt.Series1.Values) > 0 {
 		data1 := opt.Series1.Values
-		if len(data1) > dotsW {
-			data1 = data1[len(data1)-dotsW:]
-		}
-		startX := dotsW - len(data1)
-		if startX < 0 {
-			startX = 0
+		if len(data1) > opt.window() {
+			data1 = data1[len(data1)-opt.window():]
 		}
 		prevX, prevY := -1, -1
 		for i, v := range data1 {
-			x := startX + i
+			x := sampleX(i, len(data1), opt.window(), dotsW)
 			norm := (v - displayMin) / span
 			if norm < 0 {
 				norm = 0
@@ -753,4 +742,23 @@ func RenderDualTimeSeriesChart(opt DualChartOptions) string {
 	// is opt.Width wide overall is Width(opt.Width - border); the text inside
 	// it then has opt.Width - frame columns, which is what inner was sized to.
 	return styles.CardStyle.Width(opt.Width).Render(content)
+}
+
+const defaultWindow = 60
+
+func (o ChartOptions) window() int     { return windowOr(o.Window) }
+func (o DualChartOptions) window() int { return windowOr(o.Window) }
+
+func windowOr(w int) int {
+	if w > 1 {
+		return w
+	}
+	return defaultWindow
+}
+
+// sampleX places sample i of n, newest at the right edge, so a full window
+// spans the whole plot whatever its width.
+func sampleX(i, n, window, dotsW int) int {
+	slot := window - n + i
+	return int(math.Round(float64(slot) * float64(dotsW-1) / float64(window-1)))
 }

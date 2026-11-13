@@ -8,6 +8,8 @@
 
 Terminal dashboard and Prometheus exporter for Intel Arc GPUs. Reads Level Zero Sysman, sysfs and fdinfo directly; `xpu-smi` is not required.
 
+![xpu-smi-tui demo](docs/demo.gif)
+
 ## Install
 
 Requires Linux x86_64 and the Level Zero runtime (`libze1`, `libze-intel-gpu1`).
