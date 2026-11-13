@@ -1,0 +1,53 @@
+# xpu-smi-tui
+
+Terminal dashboard and Prometheus exporter for Intel Arc GPUs. Reads Level Zero Sysman, sysfs and fdinfo directly; `xpu-smi` is not required.
+
+## Install
+
+Requires Linux x86_64 and the Level Zero runtime (`libze1`, `libze-intel-gpu1`).
+
+**Release:** download the `.deb` or tarball from [Releases](https://github.com/travlytle/xpu-smi-tui/releases).
+
+```bash
+sudo apt install ./xpu-smi-tui_*.deb
+```
+
+**Go** (1.26+, needs `gcc`):
+
+```bash
+go install github.com/travlytle/xpu-smi-tui@latest
+go install github.com/travlytle/xpu-smi-tui/cmd/xpu-exporter@latest
+```
+
+**Source:** `make build`, or `./install.sh` to install with shell completions.
+
+Exact A-series VRAM and accurate PCIe throughput need `CAP_PERFMON` (the .deb and `sudo ./install.sh --system` grant it):
+
+```bash
+sudo setcap cap_perfmon+ep "$(command -v xpu-smi-tui)"
+```
+
+## Usage
+
+```
+-i, --interval N     refresh interval in seconds (default 1)
+--device N           card to focus at start (-1 = all)
+-d, --demo           simulated data
+--gpu-order LIST     PCI addresses in numbering order (or $XPU_GPU_ORDER)
+--idle-poll SECS     sample interval for a suspended card; 0 never, off always (default 30)
+-v, --version
+```
+
+Press `?` for keys and `i` for what each reading means. Run with `sudo` to name other users' processes.
+
+## Exporter
+
+```bash
+xpu-exporter --listen :9835
+```
+
+Systemd unit: `packaging/xpu-exporter@.service` (`systemctl enable --now xpu-exporter@$USER`). Grafana dashboard: `packaging/grafana/xpu-gpu.json`.
+
+## License
+
+MIT. Includes Intel's MIT-licensed Level Zero headers. Not affiliated with Intel.

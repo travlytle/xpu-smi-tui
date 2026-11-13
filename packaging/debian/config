@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+# Asked at install and on dpkg-reconfigure. High priority so the default apt
+# run shows it; non-interactive installs take the default (yes).
+db_input high xpu-smi-tui/perfmon-capability || true
+db_go || true

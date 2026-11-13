@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+. /usr/share/debconf/confmodule
+
+case "$1" in
+    configure)
+        # File capabilities live on the file, so a package upgrade (which
+        # replaces it) would drop them; apply, or clear, on every configure.
+        BIN=/usr/bin/xpu-smi-tui
+        db_get xpu-smi-tui/perfmon-capability || true
+        if command -v setcap >/dev/null 2>&1 && [ -x "$BIN" ]; then
+            if [ "$RET" = "true" ]; then
+                setcap cap_perfmon+ep "$BIN" || echo "xpu-smi-tui: could not set CAP_PERFMON on $BIN" >&2
+            else
+                setcap -r "$BIN" 2>/dev/null || true
+            fi
+        elif [ "$RET" = "true" ]; then
+            echo "xpu-smi-tui: setcap not found (install libcap2-bin) -- CAP_PERFMON not granted" >&2
+        fi
+        ;;
+esac
+
+# debconf must be told we are done with it before the script exits.
+db_stop
+exit 0

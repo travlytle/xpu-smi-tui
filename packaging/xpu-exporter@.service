@@ -1,0 +1,24 @@
+[Unit]
+Description=Intel GPU telemetry exporter for Prometheus, running as %i
+Documentation=https://github.com/travlytle/xpu-smi-tui
+After=network-online.target
+Wants=network-online.target
+
+# Enable with: systemctl enable --now xpu-exporter@<user>
+# <user> must be in the render group.
+[Service]
+Type=simple
+ExecStart=/usr/bin/xpu-exporter --listen :9835 --interval 1s
+Restart=on-failure
+RestartSec=5
+User=%i
+NoNewPrivileges=true
+# CAP_PERFMON: IIO PCIe counters and exact A-series VRAM.
+AmbientCapabilities=CAP_PERFMON
+CapabilityBoundingSet=CAP_PERFMON
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp
+
+[Install]
+WantedBy=multi-user.target

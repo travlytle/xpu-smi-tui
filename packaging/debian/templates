@@ -1,0 +1,14 @@
+Template: xpu-smi-tui/perfmon-capability
+Type: boolean
+Default: true
+Description: Grant xpu-smi-tui the CAP_PERFMON capability?
+ With CAP_PERFMON, xpu-smi-tui reports the exact VRAM in use on Arc Pro A-series
+ (i915) cards and reads each card's PCIe throughput from the CPU's own counters
+ (within 1%, where the GPU driver's are 5-16% high). Without it those show as
+ estimates or are left blank; nothing else is affected.
+ .
+ The capability is set on the /usr/bin/xpu-smi-tui file only (setcap
+ cap_perfmon+ep), so the program can read system-wide performance counters
+ when run by any user. It reads only the GPUs' and PCIe root ports' counters.
+ It is re-applied on every upgrade and removed with the package. Change later
+ with: sudo dpkg-reconfigure xpu-smi-tui
