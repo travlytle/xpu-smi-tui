@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/travlytle/xpu-smi-tui/pkg/ui"
+	"github.com/travlytle/xpu-smi-tui/pkg/ui/styles"
 	"github.com/travlytle/xpu-smi-tui/pkg/xpu"
 
 	tea "charm.land/bubbletea/v2"
@@ -35,6 +36,7 @@ func main() {
 		deviceIdx    = flag.Int("device", -1, "GPU index to focus at start (-1 shows all cards)")
 		idlePoll     = flag.String("idle-poll", os.Getenv("XPU_IDLE_POLL"), "Seconds between samples of a runtime-suspended card, which is otherwise left alone because reading it wakes it and roughly doubles its draw: a number, 0 to never wake one, or off to always poll (default 30; also $XPU_IDLE_POLL)")
 		gpuOrder     = flag.String("gpu-order", os.Getenv("XPU_GPU_ORDER"), "PCI addresses in the order GPUs are numbered, e.g. 03:00.0,04:00.0 (default: PCI address order; also $XPU_GPU_ORDER)")
+		themeName    = flag.String("theme", os.Getenv("XPU_THEME"), "Colour theme: "+strings.Join(styles.ThemeNames(), ", ")+" (default: last chosen with t; also $XPU_THEME)")
 		versionFlag  = flag.Bool("version", false, "Print version and exit")
 		shortVersion = flag.Bool("v", false, "Print version and exit (shorthand)")
 	)
@@ -69,6 +71,18 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
+	}
+
+	theme := *themeName
+	if theme == "" {
+		theme = ui.SavedTheme()
+	}
+	if err := styles.SetTheme(theme); err != nil {
+		if *themeName != "" {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		_ = styles.SetTheme("default") // a stale saved name is not fatal
 	}
 
 	config := ui.Config{

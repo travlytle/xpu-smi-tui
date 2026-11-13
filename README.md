@@ -43,10 +43,12 @@ sudo setcap cap_perfmon+ep "$(command -v xpu-smi-tui)"
 -d, --demo           simulated data
 --gpu-order LIST     PCI addresses in numbering order (or $XPU_GPU_ORDER)
 --idle-poll SECS     sample interval for a suspended card; 0 never, off always (default 30)
+--theme NAME         default, dracula, nord, gruvbox, catppuccin-mocha, catppuccin-latte,
+                     tokyo-night, solarized-dark, one-dark, monokai, rose-pine (or $XPU_THEME)
 -v, --version
 ```
 
-Press `?` for keys and `i` for what each reading means. Run with `sudo` to name other users' processes.
+Press `?` for keys, `i` for what each reading means and `t` to cycle themes. Run with `sudo` to name other users' processes.
 
 ## Exporter
 

@@ -39,6 +39,7 @@ func RenderHelp(width int, height int) string {
 		{"Esc", "Leave the filter, then clear it"},
 		{"Space", "Pause or resume polling"},
 		{"r", "Refresh now"},
+		{"t", "Cycle theme (saved)"},
 		{"+ / -", "Poll faster / slower"},
 		{"D", "Toggle demo / live mode"},
 		{"i", "What the abbreviations mean"},

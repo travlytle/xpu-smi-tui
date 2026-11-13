@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/travlytle/xpu-smi-tui/pkg/ui/components"
+	"github.com/travlytle/xpu-smi-tui/pkg/ui/styles"
 	"github.com/travlytle/xpu-smi-tui/pkg/ui/views"
 	"github.com/travlytle/xpu-smi-tui/pkg/xpu"
 
@@ -544,6 +545,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			cmds = append(cmds, m.clearStatusCmd(2*time.Second))
 
+		case "t":
+			t := styles.NextTheme()
+			msg := "Theme: " + t.Name
+			if err := saveTheme(t.Name); err != nil {
+				msg += " (not saved: " + err.Error() + ")"
+			}
+			cmds = append(cmds, m.setStatus(msg, 2*time.Second))
+
 		case "r":
 			m.statusMsg = "Refreshing telemetry..."
 			cmds = append(cmds, m.fetchTelemetryCmd(), m.clearStatusCmd(2*time.Second))
@@ -600,6 +609,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
+	v.BackgroundColor, v.ForegroundColor = styles.TerminalColors()
 	return v
 }
 
