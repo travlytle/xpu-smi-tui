@@ -1,5 +1,11 @@
 # xpu-smi-tui
 
+[![CI](https://github.com/travlytle/xpu-smi-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/travlytle/xpu-smi-tui/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/travlytle/xpu-smi-tui)](https://github.com/travlytle/xpu-smi-tui/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/travlytle/xpu-smi-tui/total)](https://github.com/travlytle/xpu-smi-tui/releases)
+[![Go](https://img.shields.io/github/go-mod/go-version/travlytle/xpu-smi-tui)](go.mod)
+[![License](https://img.shields.io/github/license/travlytle/xpu-smi-tui)](LICENSE)
+
 Terminal dashboard and Prometheus exporter for Intel Arc GPUs. Reads Level Zero Sysman, sysfs and fdinfo directly; `xpu-smi` is not required.
 
 ## Install
