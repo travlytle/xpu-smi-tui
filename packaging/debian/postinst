@@ -20,6 +20,13 @@ case "$1" in
         ;;
 esac
 
+# Pick up the exporter unit, and restart running exporters onto the new binary
+# (the unit is per user, so nothing is enabled here).
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+    systemctl try-restart 'xpu-exporter@*.service' || true
+fi
+
 # debconf must be told we are done with it before the script exits.
 db_stop
 exit 0

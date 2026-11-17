@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- The .deb now includes `xpu-exporter` and its systemd unit (it shipped only the TUI), plus the Grafana dashboard and this changelog; upgrades restart running exporters. `install.sh` installs the exporter too.
+
 ## 0.2.1
 
 - Trends: three styles, cycled with `v` and saved: stripes (alternating colours where cards overlap), lines, and per card (a small graph per card shaded by value, btop style; `s` switches braille / block). The default follows the card count: stripes for 2, lines for 3, per card from 4. Every theme has 8 card colours.

@@ -27,6 +27,11 @@ mkdir -p "${BUILD_ROOT}/usr/share/doc/${APP_NAME}"
 echo "==> Compiling optimized binary..."
 (cd "${SCRIPT_DIR}" && go build -ldflags="-s -w -X main.AppVersion=${VERSION}" -o "${BUILD_ROOT}/usr/bin/${APP_NAME}" .)
 chmod 755 "${BUILD_ROOT}/usr/bin/${APP_NAME}"
+(cd "${SCRIPT_DIR}" && go build -ldflags="-s -w" -o "${BUILD_ROOT}/usr/bin/xpu-exporter" ./cmd/xpu-exporter)
+chmod 755 "${BUILD_ROOT}/usr/bin/xpu-exporter"
+
+# Exporter service (enable per user: systemctl enable --now xpu-exporter@<user>)
+install -D -m 644 "${SCRIPT_DIR}/packaging/xpu-exporter@.service" "${BUILD_ROOT}/lib/systemd/system/xpu-exporter@.service"
 
 # Install completions
 if [ -f "${SCRIPT_DIR}/completions/xpu-smi-tui.bash" ]; then
@@ -40,9 +45,9 @@ if [ -f "${SCRIPT_DIR}/completions/xpu-smi-tui.fish" ]; then
 fi
 
 # Docs
-if [ -f "${SCRIPT_DIR}/README.md" ]; then
-    cp "${SCRIPT_DIR}/README.md" "${BUILD_ROOT}/usr/share/doc/${APP_NAME}/"
-fi
+for doc in README.md CHANGELOG.md packaging/grafana/xpu-gpu.json; do
+    cp "${SCRIPT_DIR}/${doc}" "${BUILD_ROOT}/usr/share/doc/${APP_NAME}/"
+done
 
 # The debconf question for CAP_PERFMON (see packaging/debian/templates).
 # config/postinst/postrm must be executable.
@@ -62,10 +67,11 @@ Maintainer: Travis Lytle <travlytle@gmail.com>
 Homepage: https://github.com/travlytle/xpu-smi-tui
 Depends: debconf (>= 0.5) | debconf-2.0, procps
 Recommends: libcap2-bin, libze1, libze-intel-gpu1
-Description: Terminal Dashboard for Intel GPUs
- A modern terminal user interface (TUI) for monitoring Intel Arc and Data
- Center GPUs powered by Charm (Bubble Tea & Lip Gloss). Provides live gauges,
- btop-style multi-height Braille time-series charts, and process monitoring.
+Description: Terminal dashboard and Prometheus exporter for Intel GPUs
+ xpu-smi-tui is a terminal dashboard for Intel Arc GPUs: live readings, trend
+ charts and per-process VRAM. xpu-exporter serves the same telemetry to
+ Prometheus; enable it with systemctl enable --now xpu-exporter@<user>. A
+ Grafana dashboard is in /usr/share/doc/xpu-smi-tui.
  .
  Telemetry is read in-process from Level Zero Sysman; xpu-smi is not needed.
  At install it asks whether to grant the binary CAP_PERFMON, which gives exact
@@ -73,7 +79,7 @@ Description: Terminal Dashboard for Intel GPUs
 EOF
 
 # Calculate installed size
-INSTALLED_SIZE=$(du -sk "${BUILD_ROOT}/usr" | cut -f1)
+INSTALLED_SIZE=$(du -sk "${BUILD_ROOT}/usr" "${BUILD_ROOT}/lib" | awk '{s+=$1} END {print s}')
 echo "Installed-Size: ${INSTALLED_SIZE}" >> "${BUILD_ROOT}/DEBIAN/control"
 
 # Build package

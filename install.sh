@@ -133,6 +133,14 @@ info "Installing binary to ${TARGET_BIN}/${APP_NAME}..."
 install -m 755 "${BINARY_SOURCE}" "${TARGET_BIN}/${APP_NAME}"
 success "Binary installed to ${TARGET_BIN}/${APP_NAME}"
 
+if command -v go >/dev/null 2>&1 && [ -d "${SCRIPT_DIR}/cmd/xpu-exporter" ]; then
+    (cd "${SCRIPT_DIR}" && go build -ldflags="-s -w" -o xpu-exporter ./cmd/xpu-exporter)
+fi
+if [ -f "${SCRIPT_DIR}/xpu-exporter" ]; then
+    install -m 755 "${SCRIPT_DIR}/xpu-exporter" "${TARGET_BIN}/xpu-exporter"
+    success "Exporter installed to ${TARGET_BIN}/xpu-exporter"
+fi
+
 # Install Shell Completions
 if [ -d "${SCRIPT_DIR}/completions" ]; then
     info "Installing shell completions..."

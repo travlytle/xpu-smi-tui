@@ -34,15 +34,17 @@ removed=0
 
 # Check and remove binaries
 for bin_dir in "/usr/local/bin" "${HOME}/.local/bin"; do
-    if [ -f "${bin_dir}/${APP_NAME}" ]; then
-        if [ ! -w "${bin_dir}/${APP_NAME}" ] && [ "$(id -u)" -ne 0 ]; then
-            warn "Cannot remove ${bin_dir}/${APP_NAME}: Permission denied (run with sudo to remove system install)"
-        else
-            rm -f "${bin_dir}/${APP_NAME}"
-            success "Removed binary: ${bin_dir}/${APP_NAME}"
-            removed=$((removed + 1))
+    for bin in "${APP_NAME}" xpu-exporter; do
+        if [ -f "${bin_dir}/${bin}" ]; then
+            if [ ! -w "${bin_dir}/${bin}" ] && [ "$(id -u)" -ne 0 ]; then
+                warn "Cannot remove ${bin_dir}/${bin}: Permission denied (run with sudo to remove system install)"
+            else
+                rm -f "${bin_dir}/${bin}"
+                success "Removed binary: ${bin_dir}/${bin}"
+                removed=$((removed + 1))
+            fi
         fi
-    fi
+    done
 done
 
 # Check and remove shell completions

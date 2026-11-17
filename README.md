@@ -57,7 +57,7 @@ Press `?` for keys, `i` for what each reading means, `t` to cycle themes, `v` to
 xpu-exporter --listen :9835
 ```
 
-Systemd unit: `packaging/xpu-exporter@.service` (`systemctl enable --now xpu-exporter@$USER`). Grafana dashboard: `packaging/grafana/xpu-gpu.json`.
+The .deb installs it with a systemd unit: `sudo systemctl enable --now xpu-exporter@$USER` (unit file: `packaging/xpu-exporter@.service`). Grafana dashboard: `packaging/grafana/xpu-gpu.json`, also in `/usr/share/doc/xpu-smi-tui/`.
 
 ## License
 
