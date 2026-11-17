@@ -90,9 +90,9 @@ type GTStats struct {
 
 // PowerLimits are the enforced caps from hwmon, in watts.
 type PowerLimits struct {
-	CapW        float64 // power1_cap -- the real ceiling; use instead of a hardcoded default
-	CritW       float64 // power1_crit
-	CapInterval float64 // power1_cap_interval, the cap averaging window
+	CapW        float64 // power1_cap, else power1_max, power2_cap, power2_max
+	CritW       float64 // crit of the same domain
+	CapInterval float64 // the cap's averaging window in milliseconds, as hwmon reports it
 }
 
 // EnergyDomains holds the two energy counters, in joules. There is no
@@ -428,16 +428,23 @@ func readEnergyDomains(hwmon string) EnergyDomains {
 
 func readPowerLimits(hwmon string) PowerLimits {
 	var p PowerLimits
-	if v, ok := readFloatFile(filepath.Join(hwmon, "power1_cap")); ok {
-		p.CapW = v / 1e6 // microwatts
-	} else if v, ok := readFloatFile(filepath.Join(hwmon, "power1_max")); ok {
-		p.CapW = v / 1e6 // i915 names its PL1 limit power1_max
-	}
-	if v, ok := readFloatFile(filepath.Join(hwmon, "power1_crit")); ok {
-		p.CritW = v / 1e6
-	}
-	if v, ok := readFloatFile(filepath.Join(hwmon, "power1_cap_interval")); ok {
-		p.CapInterval = v
+	// power1 is the card domain; cards without one (A-series on xe) publish
+	// only power2, the package. i915 names its PL1 limit _max rather than _cap.
+	for _, dom := range []string{"power1", "power2"} {
+		for _, name := range []string{"_cap", "_max"} {
+			v, ok := readFloatFile(filepath.Join(hwmon, dom+name))
+			if !ok {
+				continue
+			}
+			p.CapW = v / 1e6 // microwatts
+			if iv, ok := readFloatFile(filepath.Join(hwmon, dom+name+"_interval")); ok {
+				p.CapInterval = iv
+			}
+			if cv, ok := readFloatFile(filepath.Join(hwmon, dom+"_crit")); ok {
+				p.CritW = cv / 1e6
+			}
+			return p
+		}
 	}
 	return p
 }

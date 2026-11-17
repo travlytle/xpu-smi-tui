@@ -3,8 +3,12 @@
 _xpu_smi_tui() {
     _arguments -s \
         '(-d --demo)'{-d,--demo}'[Start in simulation/demo mode]' \
+        '--demo-cards[Simulated cards in demo mode (implies --demo)]:cards:(1 2 3 4 6 8)' \
         '(-i --interval)'{-i,--interval}'[Telemetry refresh interval in seconds]:seconds:(1 2 3 5 10)' \
-        '--device[Initial GPU device index to focus]:device id:(0 1 2 3)' \
+        '--device[GPU to focus at start (-1 shows all)]:device id:(-1 0 1 2 3 4 5 6 7)' \
+        '--gpu-order[PCI addresses in numbering order]:addresses:' \
+        '--idle-poll[Seconds between samples of a suspended card]:seconds:(0 10 30 60 off)' \
+        '--theme[Colour theme]:theme:(default dracula nord gruvbox catppuccin-mocha catppuccin-latte tokyo-night solarized-dark one-dark monokai rose-pine)' \
         '(-v --version)'{-v,--version}'[Print version and exit]' \
         '(-h --help)'{-h,--help}'[Print help message and exit]'
 }

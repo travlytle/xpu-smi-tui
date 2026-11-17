@@ -16,7 +16,8 @@
 	X(zesDeviceEnumTemperatureSensors) X(zesTemperatureGetProperties) X(zesTemperatureGetState) \
 	X(zesDeviceEnumPowerDomains) X(zesPowerGetProperties) X(zesPowerGetEnergyCounter) \
 	X(zesDeviceEnumFrequencyDomains) X(zesFrequencyGetProperties) X(zesFrequencyGetState) \
-	X(zesDeviceGetEccState) X(zesDeviceEnumFirmwares) X(zesFirmwareGetProperties)
+	X(zesDeviceGetEccState) X(zesDeviceEnumFirmwares) X(zesFirmwareGetProperties) \
+	X(zesDeviceEccAvailable) X(zesDevicePciGetBars) X(zesMemoryGetProperties) X(zesDeviceGetState)
 
 #define SM_DECL(name) static __typeof__(&name) f_##name;
 SM_FUNCS(SM_DECL)
@@ -84,14 +85,44 @@ int sm_init(void) {
 				if (!f_zesDeviceEnumFirmwares(d->dev, &nf, fw)) {
 					for (uint32_t k = 0; k < nf; k++) {
 						zes_firmware_properties_t fp = {.stype = ZES_STRUCTURE_TYPE_FIRMWARE_PROPERTIES};
-						if (!f_zesFirmwareGetProperties(fw[k], &fp) && strcmp(fp.name, "GFX") == 0)
+						if (f_zesFirmwareGetProperties(fw[k], &fp)) continue;
+						if (strcmp(fp.name, "GFX") == 0)
 							snprintf(d->info.gfx_firmware, sizeof d->info.gfx_firmware, "%s", fp.version);
+						else if (strcmp(fp.name, "OptionROM") == 0)
+							snprintf(d->info.oprom_firmware, sizeof d->info.oprom_firmware, "%s", fp.version);
 					}
+				}
+			}
+
+			{
+				ze_bool_t avail = 0;
+				d->info.ecc_available = f_zesDeviceEccAvailable(d->dev, &avail) ? -1 : !!avail;
+			}
+			{
+				uint32_t nb = 0;
+				if (!f_zesDevicePciGetBars(d->dev, &nb, NULL) && nb > 0) {
+					zes_pci_bar_properties_t bars[SM_MAX];
+					if (nb > SM_MAX) nb = SM_MAX;
+					for (uint32_t k = 0; k < nb; k++)
+						bars[k] = (zes_pci_bar_properties_t){.stype = ZES_STRUCTURE_TYPE_PCI_BAR_PROPERTIES};
+					if (!f_zesDevicePciGetBars(d->dev, &nb, bars))
+						for (uint32_t k = 0; k < nb; k++)
+							if (bars[k].type == ZES_PCI_BAR_TYPE_MEM && bars[k].size > d->info.bar_bytes)
+								d->info.bar_bytes = bars[k].size;
 				}
 			}
 
 			uint32_t c = SM_MAX;
 			if (!f_zesDeviceEnumMemoryModules(d->dev, &c, d->mem)) d->nmem = c;
+			d->info.mem_type = d->info.mem_bus_width = d->info.mem_channels = -1;
+			if (d->nmem > 0) {
+				zes_mem_properties_t mp = {.stype = ZES_STRUCTURE_TYPE_MEM_PROPERTIES};
+				if (!f_zesMemoryGetProperties(d->mem[0], &mp)) {
+					d->info.mem_type = (int)mp.type;
+					d->info.mem_bus_width = mp.busWidth;
+					d->info.mem_channels = mp.numChannels;
+				}
+			}
 
 			c = SM_MAX;
 			if (!f_zesDeviceEnumTemperatureSensors(d->dev, &c, d->temp)) {
@@ -176,6 +207,10 @@ int sm_device_sample(int i, sm_sample *out) {
 	if (!f_zesDevicePciGetStats(d->dev, &ps)) {
 		out->have_pci = 1; out->pci_rx = ps.rxCounter; out->pci_tx = ps.txCounter;
 		out->pci_ts = ps.timestamp; got = 1;
+	}
+	zes_device_state_t ds = {.stype = ZES_STRUCTURE_TYPE_DEVICE_STATE};
+	if (!f_zesDeviceGetState(d->dev, &ds)) {
+		out->have_state = 1; out->reset_reasons = ds.reset; out->repaired = (int)ds.repaired; got = 1;
 	}
 	return got ? 0 : 1;
 }

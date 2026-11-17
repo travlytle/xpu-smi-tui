@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -129,9 +130,14 @@ func detailPower(g *xpu.GPUCombined, width int) string {
 	derived := unknownRow("derived")
 	energy := unknownRow("energy")
 	if st != nil && st.Available {
-		if st.PowerLimits.CapW > 0 {
-			capLine = fmt.Sprintf("%-9s %.0f W over a %.0fs window   critical %.0f W",
-				"cap", st.PowerLimits.CapW, st.PowerLimits.CapInterval, st.PowerLimits.CritW)
+		if pl := st.PowerLimits; pl.CapW > 0 {
+			capLine = fmt.Sprintf("%-9s %.0f W", "cap", pl.CapW)
+			if pl.CapInterval > 0 {
+				capLine += " averaged over " + formatMillis(pl.CapInterval)
+			}
+			if pl.CritW > 0 {
+				capLine += fmt.Sprintf("   spike limit %.0f W", pl.CritW)
+			}
 		}
 		if st.CardPower.Valid {
 			derived = fmt.Sprintf("%-9s %.1f W over %.1fs", "derived", st.CardPower.Watts, st.CardPower.WindowS)
@@ -231,6 +237,9 @@ func detailMemory(g *xpu.GPUCombined, width int) string {
 	} else {
 		rows = append(rows, fmt.Sprintf("%-9s %.1f GiB used, capacity unknown", "vram", used/1024))
 	}
+	if t := memoryKind(g.Info); t != "" {
+		rows = append(rows, fmt.Sprintf("%-9s %s", "type", t))
+	}
 	if g.Stats.TrafficUnavailable {
 		rows = append(rows, unknownRow("traffic"))
 	} else {
@@ -307,6 +316,19 @@ func detailSystem(g *xpu.GPUCombined, topo *xpu.TopologyData, width int) string 
 		fmt.Sprintf("%-9s %s   vbios %s", "driver",
 			truncate(g.Info.DriverVersion, 24), truncate(g.Info.VbiosVersion, 20)),
 	}
+	if g.Stats.ResetRequired {
+		why := ""
+		if len(g.Stats.ResetReasons) > 0 {
+			why = " (" + strings.Join(g.Stats.ResetReasons, ", ") + ")"
+		}
+		rows = append(rows, lipgloss.NewStyle().Foreground(styles.ColorDanger).Bold(true).
+			Render(fmt.Sprintf("%-9s reset required%s", "health", why)))
+	} else if g.Stats.Repaired {
+		rows = append(rows, fmt.Sprintf("%-9s ok   repaired in the field", "health"))
+	}
+	if g.Info.OptionROM != "" {
+		rows = append(rows, fmt.Sprintf("%-9s %s", "oprom", optionROM(g.Info.OptionROM)))
+	}
 
 	link, runtime := unknownRow("link"), unknownRow("runtime")
 	if st := g.Stats.Sysfs; st != nil && st.Available {
@@ -332,7 +354,11 @@ func detailSystem(g *xpu.GPUCombined, topo *xpu.TopologyData, width int) string 
 			}
 		}
 	}
-	rows = append(rows, link, runtime)
+	rows = append(rows, link)
+	if r := rebarRow(g); r != "" {
+		rows = append(rows, r)
+	}
+	rows = append(rows, runtime)
 
 	display := fmt.Sprintf("%-9s %s", "display", styles.SubtleText.Render("none connected"))
 	if st := g.Stats.Sysfs; st != nil && len(st.Displays) > 0 {
@@ -355,10 +381,61 @@ func detailSystem(g *xpu.GPUCombined, topo *xpu.TopologyData, width int) string 
 	rows = append(rows, affinity)
 
 	ecc := unknownRow("ecc")
-	if g.Info.EccMode != "" {
+	if g.Info.EccSupported == "no" {
+		ecc = fmt.Sprintf("%-9s not supported", "ecc")
+	} else if g.Info.EccMode != "" {
 		ecc = fmt.Sprintf("%-9s %s   corrected %s   uncorrected %s",
 			"ecc", g.Info.EccMode, orUnknown(g.Info.EccCorrected), orUnknown(g.Info.EccUncorrected))
 	}
 	rows = append(rows, ecc, fmt.Sprintf("%-9s %s", "uuid", g.Info.UUID))
 	return detailSection("SYSTEM", rows, width)
+}
+
+// memoryKind is "GDDR6   256-bit   8 channels", leaving out what is unknown.
+func memoryKind(d xpu.DeviceInfo) string {
+	var parts []string
+	if d.MemoryType != "" {
+		parts = append(parts, d.MemoryType)
+	}
+	if d.MemoryBusWidth > 0 {
+		parts = append(parts, fmt.Sprintf("%d-bit", d.MemoryBusWidth))
+	}
+	if d.MemoryChannels > 0 {
+		parts = append(parts, fmt.Sprintf("%d channels", d.MemoryChannels))
+	}
+	return strings.Join(parts, "   ")
+}
+
+var opromRe = regexp.MustCompile(`CODE VERSION:\s*(\S+?)_OPROM DATA VERSION:\s*(\S+)`)
+
+// optionROM shortens "OPROM CODE VERSION:2304240000_OPROM DATA VERSION:2304140000".
+func optionROM(s string) string {
+	if m := opromRe.FindStringSubmatch(s); m != nil {
+		return fmt.Sprintf("code %s   data %s", m[1], m[2])
+	}
+	return truncate(s, 60)
+}
+
+// rebarRow reports the CPU's window onto VRAM. Without Resizable BAR it is a
+// 256 MiB aperture, which costs Arc cards a lot of performance.
+func rebarRow(g *xpu.GPUCombined) string {
+	bar := g.Info.BARBytes
+	if bar == 0 {
+		return ""
+	}
+	window := xpu.FormatMemoryBytes(int64(bar))
+	total, known := MemTotalMiB(g)
+	if !known || float64(bar) >= total*1024*1024*0.99 {
+		return fmt.Sprintf("%-9s on   %s window", "rebar", window)
+	}
+	return lipgloss.NewStyle().Foreground(styles.ColorWarning).Render(
+		fmt.Sprintf("%-9s off  %s window of %.0f GiB VRAM; enable Resizable BAR in firmware setup", "rebar", window, total/1024))
+}
+
+// formatMillis prints a hwmon interval: "15 ms", "28 s".
+func formatMillis(ms float64) string {
+	if ms >= 1000 {
+		return trimFloat(ms/1000) + " s"
+	}
+	return trimFloat(ms) + " ms"
 }

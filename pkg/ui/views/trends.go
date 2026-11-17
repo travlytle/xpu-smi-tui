@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/travlytle/xpu-smi-tui/pkg/ui/components"
 	"github.com/travlytle/xpu-smi-tui/pkg/ui/styles"
@@ -33,22 +34,235 @@ func RenderTrends(gpus []*xpu.GPUCombined, selectedIdx int, width int, height in
 		}
 		return renderGraphsView(gpus[idx], boxWidth, height)
 	}
-	if len(gpus) == 2 {
-		return renderOverlaidDualGraphs(gpus, boxWidth, height)
+	switch StyleFor(len(gpus)) {
+	case StylePerCard:
+		return renderSmallMultiples(gpus, boxWidth, height)
+	case StyleStripes:
+		if len(gpus) == 2 {
+			return renderOverlaidDualGraphs(gpus, boxWidth, height)
+		}
+		return renderOverlaidMultiGraphs(gpus, boxWidth, height, true)
 	}
-	// Three or more: the overlay is drawn for exactly two series, so each card
-	// gets its own block, stacked; the viewport scrolls them.
-	blocks := make([]string, 0, len(gpus))
-	for _, g := range gpus {
-		blocks = append(blocks, renderGraphsView(g, boxWidth, height))
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, blocks...)
+	return renderOverlaidMultiGraphs(gpus, boxWidth, height, false)
 }
 
-// -----------------------------------------------------------------------------
-// 1. GRAPHS VIEW (Default View - Overlaid curves or single-GPU)
-// -----------------------------------------------------------------------------
+// TrendsStyle is how Trends shows several cards.
+type TrendsStyle int
 
+const (
+	StyleAuto    TrendsStyle = iota // by card count: see StyleFor
+	StyleStripes                    // one chart per metric, filled, alternating colours where cards overlap
+	StyleLines                      // one chart per metric, a line per card
+	StylePerCard                    // a small graph per card, shaded by value
+)
+
+// Style is the active setting; v cycles it.
+var Style = StyleAuto
+
+var styleNames = map[TrendsStyle]string{StyleStripes: "stripes", StyleLines: "lines", StylePerCard: "per card"}
+
+func (s TrendsStyle) String() string { return styleNames[s] }
+
+// ParseTrendsStyle reads a saved setting; anything unknown is auto.
+func ParseTrendsStyle(s string) TrendsStyle {
+	for k, v := range styleNames {
+		if v == s {
+			return k
+		}
+	}
+	return StyleAuto
+}
+
+// StyleFor is the style n cards are drawn in. Without a choice it is the one
+// that reads best at that count: stripes for two (past two, the area every
+// card shares turns into a weave of colours), lines for three, a graph per
+// card from four.
+func StyleFor(n int) TrendsStyle {
+	if Style != StyleAuto {
+		return Style
+	}
+	switch {
+	case n <= 2:
+		return StyleStripes
+	case n == 3:
+		return StyleLines
+	}
+	return StylePerCard
+}
+
+// NextStyle is the style v moves to from the one n cards are drawn in now.
+func NextStyle(n int) TrendsStyle {
+	return map[TrendsStyle]TrendsStyle{StyleStripes: StyleLines, StyleLines: StylePerCard, StylePerCard: StyleStripes}[StyleFor(n)]
+}
+
+// trendMetric is one Trends chart: its title, unit, ceiling and series.
+type trendMetric struct {
+	title, unit string
+	top         float64
+	values      func(*xpu.GPUCombined) []float64
+}
+
+func trendMetrics(gpus []*xpu.GPUCombined) []trendMetric {
+	maxOf := func(f func(*xpu.GPUCombined) float64) float64 {
+		m := 0.0
+		for _, g := range gpus {
+			m = math.Max(m, f(g))
+		}
+		return m
+	}
+	var fans [][]float64
+	for _, g := range gpus {
+		fans = append(fans, g.History.FanRPM.Values())
+	}
+	return []trendMetric{
+		{"Power Draw", "W", maxOf(PowerLimitW), func(g *xpu.GPUCombined) []float64 { return g.History.PowerW.Values() }},
+		{"Core Temperature", "°C", maxOf(CoreTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.CoreTemp.Values()) }},
+		{"VRAM Utilization", "%", 100, func(g *xpu.GPUCombined) []float64 { return g.History.MemoryUtil.Values() }},
+		{"Fan Speed", "RPM", fanScale(fans...), func(g *xpu.GPUCombined) []float64 { return g.History.FanRPM.Values() }},
+		{"Memory Temperature", "°C", maxOf(MemTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.MemoryTemp.Values()) }},
+	}
+}
+
+// renderSmallMultiples gives each metric a box holding one small filled
+// graph per card, shaded by value, btop style. It scales to many cards where
+// an overlay cannot.
+func renderSmallMultiples(gpus []*xpu.GPUCombined, boxWidth int, height int) string {
+	for _, g := range gpus {
+		if g.History == nil {
+			return styles.CardStyle.Width(boxWidth + 2).Render(styles.MutedText.Render("No history yet."))
+		}
+	}
+	twoColumn := boxWidth >= 95
+	chartW := boxWidth
+	if twoColumn {
+		chartW = (boxWidth - 4) / 2
+	}
+	// height is the view's own (header and footer are outside it). Three
+	// boxes stack in a column with a blank row between; each spends 4 rows
+	// on border, title and time axis.
+	perBox := max(height-2, 12)/3 - 4
+	rows := clamp(perBox/len(gpus), 1, 4)
+
+	labelW := 0
+	for _, g := range gpus {
+		labelW = max(labelW, lipgloss.Width(g.Info.Label()))
+	}
+	const valueW = 10
+
+	var boxes []string
+	for _, m := range trendMetrics(gpus) {
+		inner := chartW - styles.CardStyle.GetHorizontalFrameSize()
+		graphW := max(inner-labelW-valueW-2, 10)
+		title := components.FitHeader(styles.BoldText.Render(m.title),
+			styles.MutedText.Render(fmt.Sprintf("0–%s %s", trimFloat(m.top), m.unit)), inner)
+		lines := []string{title}
+		for _, g := range gpus {
+			vals := m.values(g)
+			value := styles.MutedText.Render("--")
+			if len(vals) > 0 {
+				value = styles.RegularText.Render(fmt.Sprintf("%.0f %s", vals[len(vals)-1], m.unit))
+			}
+			graph := components.RenderMiniGraph(vals, 0, m.top, graphW, rows, 0, styles.Heat)
+			label := lipgloss.NewStyle().Bold(true).Foreground(accentFor(g.Info.GPUNumber())).Render(g.Info.Label())
+			for r, gl := range graph {
+				left, right := strings.Repeat(" ", labelW), ""
+				if r == len(graph)-1 { // the bottom row, where every graph starts
+					left = label + strings.Repeat(" ", labelW-lipgloss.Width(label))
+					right = value
+				}
+				gl += strings.Repeat(" ", graphW-lipgloss.Width(gl))
+				lines = append(lines, left+" "+gl+" "+strings.Repeat(" ", max(valueW-lipgloss.Width(right), 0))+right)
+			}
+		}
+		axis := styles.SubtleText
+		lines = append(lines, strings.Repeat(" ", labelW+1)+axis.Render("-60s")+
+			strings.Repeat(" ", max(graphW-7, 1))+axis.Render("now"))
+		boxes = append(boxes, styles.CardStyle.Width(chartW).Render(strings.Join(lines, "\n")))
+	}
+
+	if twoColumn {
+		return lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.JoinHorizontal(lipgloss.Top, boxes[0], "  ", boxes[1]), "",
+			lipgloss.JoinHorizontal(lipgloss.Top, boxes[2], "  ", boxes[3]), "",
+			boxes[4])
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, boxes[0], "", boxes[1], "", boxes[2], "", boxes[3], "", boxes[4])
+}
+
+func clamp(v, lo, hi int) int { return max(lo, min(hi, v)) }
+
+// trimFloat prints 275 as "275" and 99.5 as "99.5".
+func trimFloat(v float64) string {
+	return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.1f", v), "0"), ".")
+}
+
+// renderOverlaidMultiGraphs puts every card on one chart per metric, as
+// striped filled areas (fill) or lines.
+func renderOverlaidMultiGraphs(gpus []*xpu.GPUCombined, boxWidth int, height int, fill bool) string {
+	for _, g := range gpus {
+		if g.History == nil {
+			return styles.CardStyle.Width(boxWidth + 2).Render(styles.MutedText.Render("No history yet."))
+		}
+	}
+	twoColumn := boxWidth >= 95
+	chartW := boxWidth
+	if twoColumn {
+		chartW = (boxWidth - 4) / 2
+	}
+	availH := max(height-7, 12)
+	chartH := 4
+	switch {
+	case availH >= 30 && height >= 48:
+		chartH = 8
+	case availH >= 30:
+		chartH = 7
+	case availH >= 22:
+		chartH = 6
+	}
+
+	series := func(values func(*xpu.GPUCombined) []float64) []components.SeriesData {
+		out := make([]components.SeriesData, len(gpus))
+		for i, g := range gpus {
+			out[i] = components.SeriesData{Label: g.Info.Label(), Values: values(g), Color: accentFor(g.Info.GPUNumber())}
+		}
+		return out
+	}
+	maxOf := func(f func(*xpu.GPUCombined) float64) float64 {
+		m := 0.0
+		for _, g := range gpus {
+			m = math.Max(m, f(g))
+		}
+		return m
+	}
+	zero, pct := 0.0, 100.0
+	chart := func(title, unit string, top float64, values func(*xpu.GPUCombined) []float64) string {
+		return components.RenderMultiTimeSeriesChart(components.MultiChartOptions{
+			Title: title, Unit: unit, Width: chartW, Height: chartH,
+			FixedMin: &zero, FixedMax: &top, Series: series(values), Fill: fill,
+		})
+	}
+	var fans [][]float64
+	for _, g := range gpus {
+		fans = append(fans, g.History.FanRPM.Values())
+	}
+
+	power := chart("Power Draw", "W", maxOf(PowerLimitW), func(g *xpu.GPUCombined) []float64 { return g.History.PowerW.Values() })
+	core := chart("Core Temperature", "°C", maxOf(CoreTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.CoreTemp.Values()) })
+	vram := chart("VRAM Utilization", "%", pct, func(g *xpu.GPUCombined) []float64 { return g.History.MemoryUtil.Values() })
+	fan := chart("Fan Speed", "RPM", fanScale(fans...), func(g *xpu.GPUCombined) []float64 { return g.History.FanRPM.Values() })
+	mem := chart("Memory Temperature", "°C", maxOf(MemTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.MemoryTemp.Values()) })
+
+	if twoColumn {
+		return lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.JoinHorizontal(lipgloss.Top, power, "  ", core), "",
+			lipgloss.JoinHorizontal(lipgloss.Top, vram, "  ", fan), "",
+			mem)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, power, "", core, "", vram, "", fan, "", mem)
+}
+
+// renderGraphsView is one card's full charts, with axes and min/avg/max: the
+// view when a single card is focused or installed.
 func renderGraphsView(g *xpu.GPUCombined, boxWidth int, height int) string {
 	gpuColor := accentFor(g.Info.GPUNumber())
 	if g.History == nil {
@@ -173,9 +387,9 @@ func renderGraphsView(g *xpu.GPUCombined, boxWidth int, height int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, topRow, "", chartLayout)
 }
 
-// renderOverlaidDualGraphs overlays GPU 0 and GPU 1 together on the same chart per metric
+// renderOverlaidDualGraphs is the overlay for exactly two cards: both filled,
+// striped where they overlap.
 func renderOverlaidDualGraphs(gpus []*xpu.GPUCombined, boxWidth int, height int) string {
-	// Exactly two cards reach here; RenderTrends stacks single-card blocks otherwise.
 	g0 := gpus[0]
 	g1 := gpus[1]
 	if g0.History == nil || g1.History == nil {
@@ -333,14 +547,6 @@ func renderOverlaidDualGraphs(gpus []*xpu.GPUCombined, boxWidth int, height int)
 	return lipgloss.JoinVertical(lipgloss.Left, powerChart, "", coreTempChart)
 }
 
-// -----------------------------------------------------------------------------
-// 2. TABLE VIEW (Compact Responsive Density Matrix)
-// -----------------------------------------------------------------------------
-
-// -----------------------------------------------------------------------------
-// 3. CARDS VIEW (Multi-Card Gauges & Trends)
-// -----------------------------------------------------------------------------
-
 // fanScale is the fan chart's ceiling: the highest speed seen plus headroom,
 // rounded up to 500 RPM. Cards publish no maximum fan speed.
 func fanScale(series ...[]float64) float64 {
@@ -351,4 +557,15 @@ func fanScale(series ...[]float64) float64 {
 		}
 	}
 	return math.Max(1000, math.Ceil(peak*1.1/500)*500)
+}
+
+// reported drops a temperature history that is all zeros: 0 °C is a card
+// without that sensor (the A40 has no VRAM sensor), not a reading.
+func reported(vs []float64) []float64 {
+	for _, v := range vs {
+		if v != 0 {
+			return vs
+		}
+	}
+	return nil
 }

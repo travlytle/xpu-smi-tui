@@ -57,6 +57,8 @@ type Exporter struct {
 	pcieWidth   *prometheus.GaugeVec
 	pcieSpeed   *prometheus.GaugeVec
 	throttled   *prometheus.GaugeVec
+	barBytes    *prometheus.GaugeVec
+	resetReq    *prometheus.GaugeVec
 }
 
 // New builds an Exporter and registers its metrics with reg.
@@ -177,12 +179,23 @@ func New(col xpu.Collector, interval time.Duration, reg prometheus.Registerer) *
 			Namespace: ns, Name: "gpu_throttled",
 			Help: "1 if this GT is currently throttled for the given reason (pl1, pl2, pl4, thermal, vr_thermalert, vr_tdc, prochot, ratl), 0 otherwise. vr_thermalert/vr_tdc are the only host-visible signal that the voltage regulator -- the hottest component on these cards -- is in trouble, since it has no temperature sensor of its own.",
 		}, []string{"device", "gt", "reason"}),
+
+		barBytes: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: ns, Name: "gpu_bar_bytes",
+			Help: "Size of the VRAM BAR the CPU can map. Below VRAM size means Resizable BAR is off.",
+		}, labels),
+
+		resetReq: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: ns, Name: "gpu_reset_required",
+			Help: "1 if the driver reports the card needs a reset (wedged, or to finish a repair).",
+		}, labels),
 	}
 
 	reg.MustRegister(
 		e.info, e.up, e.idle, e.busy, e.computeBusy, e.power, e.powerCap,
 		e.memUsed, e.memHost, e.memEstimate, e.memTotal, e.temp, e.tempCrit, e.fanRPM, e.pcie,
 		e.clock, e.clockReq, e.clockMax, e.bandwidth, e.pcieWidth, e.pcieSpeed, e.throttled,
+		e.barBytes, e.resetReq,
 	)
 	return e
 }
@@ -223,6 +236,9 @@ func (e *Exporter) discover(ctx context.Context) {
 	e.mu.Unlock()
 	for _, d := range devices {
 		e.info.WithLabelValues(deviceLabel(d.GPUNumber()), d.DeviceName, shortModel(d.DeviceName), d.PciBdf, d.UUID, d.DriverVersion).Set(1)
+		if d.BARBytes > 0 {
+			e.barBytes.WithLabelValues(deviceLabel(d.GPUNumber())).Set(float64(d.BARBytes))
+		}
 	}
 }
 
@@ -299,6 +315,7 @@ func (e *Exporter) poll(ctx context.Context) {
 			continue
 		}
 		e.up.WithLabelValues(dev).Set(1)
+		e.resetReq.WithLabelValues(dev).Set(b2f(s.ResetRequired))
 		// A card being left alone to suspend is not updated: reading it would
 		// wake it. Its gauges keep the last sample (Prometheus sees a step, not a
 		// gap), and this one says why.
@@ -476,4 +493,11 @@ func tempCrit(s *xpu.GPUStats, label string) (float64, bool) {
 		return 0, false
 	}
 	return sensor.CritC, true
+}
+
+func b2f(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
 }

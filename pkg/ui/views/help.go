@@ -33,13 +33,15 @@ func RenderHelp(width int, height int) string {
 		{"PgUp / PgDn", "Scroll a full page"},
 		{"Ctrl+U / Ctrl+D", "Scroll half a page"},
 		{"g / G or Home/End", "Jump to top or bottom"},
-		{"[ / ]", "Focus previous / next card (Overview, Detail)"},
-		{"b", "Focus both cards"},
+		{"[ / ]", "Focus previous / next card"},
+		{"b", "Show all cards"},
 		{"/", "Filter the workload list (Overview)"},
 		{"Esc", "Leave the filter, then clear it"},
 		{"Space", "Pause or resume polling"},
 		{"r", "Refresh now"},
 		{"t", "Cycle theme (saved)"},
+		{"v", "Trends style: stripes / lines / per card (saved)"},
+		{"s", "Per-card graphs: braille / block (saved)"},
 		{"+ / -", "Poll faster / slower"},
 		{"D", "Toggle demo / live mode"},
 		{"i", "What the abbreviations mean"},
@@ -59,7 +61,7 @@ func RenderHelp(width int, height int) string {
 		styles.MutedText.Render("  • BUSY: GT idle residency; ccs is the compute engine inference runs on"),
 		styles.MutedText.Render("  • Core / Mem Temp: die and VRAM sensors, against their own crit limits"),
 		styles.MutedText.Render("  • VR Temp: voltage regulator; usually the hottest point, no hwmon sensor"),
-		styles.MutedText.Render("  • Power: board draw against the cap hwmon reports, not a hardcoded TDP"),
+		styles.MutedText.Render("  • Power: draw against the limit the driver reports, not a hardcoded TDP"),
 	}
 
 	closeHint := styles.HighlightText.Render("Press [?] or [Esc] to dismiss")

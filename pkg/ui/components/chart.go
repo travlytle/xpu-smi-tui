@@ -164,6 +164,9 @@ func fitHeader(left, right string, width int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, ansi.Truncate(left, width, "…"), right)
 }
 
+// FitHeader is fitHeader for callers outside this package.
+func FitHeader(left, right string, width int) string { return fitHeader(left, right, width) }
+
 // ChartOptions configures a single-series time-series graph
 type ChartOptions struct {
 	Title      string

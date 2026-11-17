@@ -36,6 +36,12 @@ func NewMockCollector() *MockCollector {
 			VendorName:      "Intel(R) Corporation",
 			DriverVersion:   "0440644969978EC8EB1C8B2",
 			VbiosVersion:    "BMG_ _31.1062",
+			OptionROM:       "OPROM CODE VERSION:2304240000_OPROM DATA VERSION:2304140000",
+			EccSupported:    "yes",
+			BARBytes:        32 << 30,
+			MemoryType:      "GDDR6",
+			MemoryBusWidth:  256,
+			MemoryChannels:  8,
 			MemoryTotalMiB:  28568,
 			MemoryFreeMiB:   5520,
 			PowerLimitW:     275,
@@ -53,6 +59,12 @@ func NewMockCollector() *MockCollector {
 			VendorName:      "Intel(R) Corporation",
 			DriverVersion:   "0440644969978EC8EB1C8B2",
 			VbiosVersion:    "BMG_ _31.1062",
+			OptionROM:       "OPROM CODE VERSION:2304240000_OPROM DATA VERSION:2304140000",
+			EccSupported:    "yes",
+			BARBytes:        32 << 30,
+			MemoryType:      "GDDR6",
+			MemoryBusWidth:  256,
+			MemoryChannels:  8,
 			MemoryTotalMiB:  28568,
 			MemoryFreeMiB:   8285,
 			PowerLimitW:     275,
@@ -113,20 +125,10 @@ func (m *MockCollector) CollectStats(ctx context.Context, deviceIDs []int) (map[
 	result := make(map[int]*GPUStats)
 
 	for _, devID := range deviceIDs {
-		// GPU 0 is heavily loaded, GPU 1 has medium load
-		basePower := 240.0
-		baseTemp := 70.0
-		baseMemTemp := 85.0
-		baseUtil := 83.0
-		baseFreq := 2800.0
-
-		if devID == 1 {
-			basePower = 58.0
-			baseTemp = 59.0
-			baseMemTemp = 64.0
-			baseUtil = 74.0
-			baseFreq = 1200.0
-		}
+		// Each simulated card runs its own load, so a many-card demo is not six
+		// copies of one: GPU 0 heavy, GPU 1 medium, then a spread down to idle.
+		p := demoProfiles[devID%len(demoProfiles)]
+		basePower, baseTemp, baseMemTemp, baseUtil, baseFreq := p.power, p.temp, p.memTemp, p.util, p.freq
 
 		jitter := (m.rnd.Float64() - 0.5) * 6.0
 		wave := math.Sin(t+float64(devID)) * 10.0
@@ -155,7 +157,7 @@ func (m *MockCollector) CollectStats(ctx context.Context, deviceIDs []int) (map[
 			MemoryBandwidthPercent: math.Abs(math.Sin(t)) * 45.0,
 			PcieReadKBps:           math.Abs(math.Sin(t*1.5)) * 340000,
 			PcieWriteKBps:          math.Abs(math.Cos(t*1.5)) * 120000,
-			FanSpeedRPM:            1050.0 + math.Sin(t)*40.0 + (m.rnd.Float64()-0.5)*15.0,
+			FanSpeedRPM:            p.fan + math.Sin(t+float64(devID))*40.0 + (m.rnd.Float64()-0.5)*15.0,
 			Tiles: map[string]TileDetails{
 				"tile_0": {
 					PowerW:       TileMetric{Current: power, Avg: power * 0.98, Max: 275},
@@ -178,6 +180,17 @@ func (m *MockCollector) CollectStats(ctx context.Context, deviceIDs []int) (map[
 // mockSysfs synthesizes the per-card sysfs detail so demo mode exercises the
 // same views as real hardware -- the channel heat map, throttle badges and
 // per-GT busy figures would otherwise be blank under --demo.
+type demoProfile struct{ power, temp, memTemp, util, freq, fan float64 }
+
+var demoProfiles = []demoProfile{
+	{240, 70, 85, 83, 2800, 1050}, // heavy
+	{58, 59, 64, 74, 1200, 1050},  // medium
+	{165, 66, 78, 55, 2400, 980},
+	{31, 46, 52, 22, 400, 720}, // near idle
+	{205, 68, 82, 91, 2600, 1180},
+	{96, 62, 70, 41, 1800, 900},
+}
+
 func (m *MockCollector) mockSysfs(devID int, t, power, coreTemp, memTemp, util float64) *SysfsStats {
 	st := &SysfsStats{
 		Available:   true,
@@ -374,17 +387,22 @@ func (m *MockCollector) mockFdinfo(devID int, t, util, usedMiB float64) *FdinfoS
 	}
 }
 
-// WithDevices grows the simulated machine to n cards, cloning the first card's
-// specs under new ids and bus addresses. Tests use it to render a three-card
-// layout, which the real machine here cannot yet provide.
+// WithDevices sets the simulated machine to n cards (at least 1), cloning the
+// first card's specs under new ids and bus addresses. Bus numbers stay below
+// 0x100 and in id order, so cards number the same way as on real hardware.
 func (m *MockCollector) WithDevices(n int) *MockCollector {
+	n = max(n, 1)
+	if len(m.devices) > n {
+		m.devices = m.devices[:n]
+	}
 	for len(m.devices) < n {
 		d := m.devices[0]
 		id := len(m.devices)
+		bus := 0x80 + 0x08*(id-2)
 		d.DeviceID = id
-		d.PciBdf = fmt.Sprintf("0000:%02x:00.0", 0x19+0x4e*id)
+		d.PciBdf = fmt.Sprintf("0000:%02x:00.0", bus)
 		d.DrmDevice = fmt.Sprintf("/dev/dri/card%d", id)
-		d.UUID = fmt.Sprintf("00000000-0000-%04x-0000-0000e2238086", 0x19+0x4e*id)
+		d.UUID = fmt.Sprintf("00000000-0000-%04x-0000-0000e2238086", bus)
 		m.devices = append(m.devices, d)
 	}
 	return m

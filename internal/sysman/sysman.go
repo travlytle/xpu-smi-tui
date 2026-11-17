@@ -28,7 +28,33 @@ type Device struct {
 	GFXFirmware        string  // "BMG__31.1062"; empty where the card publishes none
 	MaxFreqMHz         float64 // GPU domain ceiling
 	ECC                string  // "Enabled", "Disabled" or "N/A"
+	ECCAvailable       int     // -1 unknown, 0 no, 1 yes
 	Integrated         bool
+
+	OptionROM      string // "OPROM CODE VERSION:..."; empty where the card publishes none
+	BARBytes       uint64 // largest memory BAR: the VRAM the CPU can map; 0 unknown
+	MemoryType     string // "GDDR6"; empty if unknown
+	MemoryBusWidth int    // bits; 0 unknown
+	MemoryChannels int    // 0 unknown
+}
+
+// memTypeNames follows zes_mem_type_t.
+var memTypeNames = []string{"HBM", "DDR", "DDR3", "DDR4", "DDR5", "LPDDR", "LPDDR3", "LPDDR4", "LPDDR5",
+	"SRAM", "L1", "L3", "GRF", "SLM", "GDDR4", "GDDR5", "GDDR5X", "GDDR6", "GDDR6X", "GDDR7", "LPDDR5X", "HBM2", "DDR2"}
+
+func memTypeName(t int) string {
+	if t < 0 || t >= len(memTypeNames) {
+		return ""
+	}
+	return memTypeNames[t]
+}
+
+// positive turns the driver's -1 for "not reported" into 0.
+func positive(v int) int {
+	if v < 0 {
+		return 0
+	}
+	return v
 }
 
 // formatUUID prints a Level Zero device UUID the way xpu-smi does: the 16
@@ -95,7 +121,7 @@ type Freq struct {
 }
 
 // Sample is one reading of one device. Have* say whether the driver supports
-// that group at all -- the A40 (i915) has memory and power but no bandwidth or
+// that group at all -- some cards report memory and power but no bandwidth or
 // PCIe counters -- which is not the same as the value being zero.
 type Sample struct {
 	HaveMemory       bool
@@ -114,4 +140,20 @@ type Sample struct {
 	HavePCI       bool
 	PCIRx, PCITx  uint64 // cumulative bytes
 	PCITimestampU uint64
+
+	HaveState     bool
+	ResetRequired bool     // the driver says the card needs a reset
+	ResetReasons  []string // "wedged", "repair"
+	Repaired      bool     // an in-field repair has been performed
+}
+
+func resetReasons(flags uint32) []string {
+	var out []string
+	if flags&1 != 0 {
+		out = append(out, "wedged")
+	}
+	if flags&2 != 0 {
+		out = append(out, "repair")
+	}
+	return out
 }

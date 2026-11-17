@@ -354,11 +354,7 @@ func orDefaultScale(v, fallback float64) float64 {
 // than alternating two colours by parity, so a third card is not drawn in the
 // first card's colour.
 func accentFor(deviceID int) color.Color {
-	palette := []color.Color{styles.ColorGPU0, styles.ColorGPU1, styles.ColorAccent, styles.ColorWarning}
-	if deviceID < 0 {
-		deviceID = 0
-	}
-	return palette[deviceID%len(palette)]
+	return styles.GPUColor(deviceID)
 }
 
 // truncate shortens s to at most maxWidth display columns, ending in "..." when

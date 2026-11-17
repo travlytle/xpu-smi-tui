@@ -22,3 +22,18 @@ func TestEccName(t *testing.T) {
 		}
 	}
 }
+
+func TestNewDeviceFields(t *testing.T) {
+	if memTypeName(17) != "GDDR6" || memTypeName(-1) != "" || memTypeName(99) != "" {
+		t.Error("memTypeName")
+	}
+	if positive(-1) != 0 || positive(256) != 256 {
+		t.Error("positive")
+	}
+	if r := resetReasons(3); len(r) != 2 || r[0] != "wedged" || r[1] != "repair" {
+		t.Errorf("resetReasons(3) = %v", r)
+	}
+	if resetReasons(0) != nil {
+		t.Error("resetReasons(0) should be empty")
+	}
+}

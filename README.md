@@ -8,7 +8,7 @@
 
 Terminal dashboard and Prometheus exporter for Intel Arc GPUs. Reads Level Zero Sysman, sysfs and fdinfo directly; `xpu-smi` is not required.
 
-![xpu-smi-tui demo](docs/demo.gif)
+![xpu-smi-tui demo](docs/demo-v0.2.1.gif)
 
 ## Install
 
@@ -41,6 +41,7 @@ sudo setcap cap_perfmon+ep "$(command -v xpu-smi-tui)"
 -i, --interval N     refresh interval in seconds (default 1)
 --device N           card to focus at start (-1 = all)
 -d, --demo           simulated data
+--demo-cards N       simulated cards, 1-16 (default 6)
 --gpu-order LIST     PCI addresses in numbering order (or $XPU_GPU_ORDER)
 --idle-poll SECS     sample interval for a suspended card; 0 never, off always (default 30)
 --theme NAME         default, dracula, nord, gruvbox, catppuccin-mocha, catppuccin-latte,
@@ -48,7 +49,7 @@ sudo setcap cap_perfmon+ep "$(command -v xpu-smi-tui)"
 -v, --version
 ```
 
-Press `?` for keys, `i` for what each reading means and `t` to cycle themes. Run with `sudo` to name other users' processes.
+Press `?` for keys, `i` for what each reading means, `t` to cycle themes, `v` to cycle the Trends style (stripes, lines, per card) and `s` for braille or block graphs. Run with `sudo` to name other users' processes.
 
 ## Exporter
 

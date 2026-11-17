@@ -566,3 +566,17 @@ func TestSysfsXeIsNotReportedAsI915(t *testing.T) {
 		t.Errorf("xe GTs = %+v", st.GTs)
 	}
 }
+
+func TestPowerLimitsPackageOnly(t *testing.T) {
+	hwmon := t.TempDir()
+	write(t, filepath.Join(hwmon, "power2_max"), "35000000")
+	write(t, filepath.Join(hwmon, "power2_max_interval"), "28")
+	p := readPowerLimits(hwmon)
+	if p.CapW != 35 || p.CapInterval != 28 {
+		t.Errorf("got %+v, want cap 35 W over 28", p)
+	}
+	write(t, filepath.Join(hwmon, "power1_cap"), "275000000")
+	if p := readPowerLimits(hwmon); p.CapW != 275 {
+		t.Errorf("card domain should win, got %+v", p)
+	}
+}

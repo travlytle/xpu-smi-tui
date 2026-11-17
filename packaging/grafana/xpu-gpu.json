@@ -67,7 +67,7 @@
       "id": 201,
       "type": "stat",
       "title": "GPU $device",
-      "description": "State: COMPUTING = compute engine running; AWAKE = card awake but not computing (e.g. a model just sitting in VRAM); IDLE = nothing running; SUSPENDED = card asleep, the other tiles are its last readings before sleep; OFFLINE = the exporter is unreachable. Throttle: POWER CAP is the normal ceiling under load, THERMAL needs attention (it has never fired in the retained history). Hottest leaves out the voltage regulator, which while computing (about 5 h of computing in ~9 days of history) ran a median of 77-81 \u00b0C and a p90 of 84-90 \u00b0C, peaked at 95 \u00b0C and has no published limit, so it would often turn this tile yellow during normal inference; it is charted under Details > All sensors. A B70's core reading can hold its last value while the card idles (a known sensor quirk).",
+      "description": "COMPUTING = compute engine running; AWAKE = awake but not computing (e.g. a model resident in VRAM); IDLE = nothing running; SUSPENDED = asleep, the other tiles are its last readings; OFFLINE = exporter unreachable. POWER CAP is the normal ceiling under load; THERMAL needs attention. Hottest leaves out the voltage regulator, which has no published limit (see Details > All sensors).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -593,7 +593,7 @@
       "id": 302,
       "type": "timeseries",
       "title": "VRAM used",
-      "description": "Bytes resident per card against the card's total (dashed grey). A loaded B70 sits at about 97 to 99 %, which is normal.",
+      "description": "Bytes resident per card against its total (dashed grey). Near full is normal with a model loaded.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -805,7 +805,7 @@
       "id": 304,
       "type": "timeseries",
       "title": "Core temperature",
-      "description": "Core die per card. Dashed yellow and red lines are the dashboard's warning marks (85 / 95 \u00b0C); hardware critical is 100 \u00b0C. A B70 core sensor can freeze at its last value while the card is idle. VR, memory, controller and per-channel VRAM are under Details.",
+      "description": "Core die per card. Dashed yellow and red are warning marks (85 / 95 °C). A B70's core sensor can hold its last value while idle. Other sensors are under Details.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -960,7 +960,7 @@
       "id": 305,
       "type": "timeseries",
       "title": "Power draw",
-      "description": "Board power against the enforced cap (dashed grey: 275 W, the B70's rated limit; both B70s share it). Sitting at the cap under load is normal (see POWER CAP in the card above); peaks a little above it are recorded (about 290 W so far). Each point is the peak within its time step, so idle power looks spikier than its average.",
+      "description": "Draw against the enforced cap (dashed grey). Sitting at the cap under load is normal. Each point is the peak within its time step, so idle power looks spikier than its average.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1171,7 +1171,7 @@
           "id": 401,
           "type": "timeseries",
           "title": "All sensors -- gpu $device",
-          "description": "core, memory, vr (voltage regulator: hottest part, no published limit), mctrl, pcie. Critical is 100 \u00b0C (memory 105). Each point is the peak within its time step.",
+          "description": "core, memory, vr (voltage regulator: hottest part, no published limit), mctrl, pcie. Each point is the peak within its time step.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1340,7 +1340,7 @@
           "id": 402,
           "type": "heatmap",
           "title": "VRAM channel temperature",
-          "description": "One row per VRAM channel (16 per B70; the xe driver publishes these). A single hot row is what the aggregate memory sensor averages away.",
+          "description": "One row per VRAM channel, on cards whose driver publishes them (16 on a B70). A single hot channel is what the aggregate memory sensor hides.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1949,7 +1949,7 @@
           "id": 406,
           "type": "timeseries",
           "title": "PCIe throughput",
-          "description": "rx = card reading host memory (peaks about 15 GB/s during model load, the Gen3 x16 ceiling); tx = card writing host memory.",
+          "description": "rx = card reading host memory; tx = card writing it. Model loads run at the link's ceiling.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -2105,7 +2105,7 @@
           "id": 407,
           "type": "table",
           "title": "PCIe link",
-          "description": "Negotiated host link. Both B70s have reported Gen3 (8 GT/s) for the whole retained history (about 9 days), including at full load. They support Gen5 (32 GT/s); if \"now\" stays below \"max\", the slot or BIOS is limiting the card (the observed PCIe peak of about 15.5 GB/s equals the Gen3 x16 ceiling).",
+          "description": "Negotiated host link. If now stays below max, the slot or firmware is limiting the card.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -2245,7 +2245,7 @@
           "id": 408,
           "type": "state-timeline",
           "title": "Throttle reasons -- gpu $device",
-          "description": "pl1, pl2 and pl4 are the sustained, burst and peak power limits and show blue \"cap\", which is normal under load. thermal, prochot (processor hot), ratl (running-average thermal limit) and vr_thermalert / vr_tdc (voltage regulator) are the ones to act on and show red \"THROTTLE\". Nothing red has fired in the retained history. Grey = flag reported and clear; blank = no data.",
+          "description": "pl1, pl2 and pl4 are the sustained, burst and peak power limits and show blue \"cap\", which is normal under load. thermal, prochot (processor hot), ratl (running-average thermal limit) and vr_thermalert / vr_tdc (voltage regulator) are the ones to act on and show red \"THROTTLE\". Grey = flag reported and clear; blank = no data.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -2475,6 +2475,216 @@
             }
           ],
           "interval": "1s"
+        },
+        {
+          "id": 410,
+          "type": "table",
+          "title": "Card health",
+          "description": "Reset: the driver says the card needs a reset (wedged, or to finish a repair). ReBAR: whether the CPU can map all of VRAM; without it Arc cards lose a lot of performance.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 89
+          },
+          "fieldConfig": {
+            "defaults": {
+              "decimals": 0,
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false,
+                "minWidth": 60
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "GPU"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Reset"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "0": {
+                            "text": "not needed",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "1": {
+                            "text": "REQUIRED",
+                            "color": "red",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "ReBAR"
+                },
+                "properties": [
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "value",
+                        "options": {
+                          "1": {
+                            "text": "on",
+                            "color": "green",
+                            "index": 0
+                          },
+                          "0": {
+                            "text": "OFF",
+                            "color": "red",
+                            "index": 1
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "BAR window"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "lg",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "fields": ""
+            },
+            "sortBy": [
+              {
+                "displayName": "GPU",
+                "desc": false
+              }
+            ]
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "refId": "A",
+              "expr": "max by (device, model) (xpu_gpu_reset_required{device=~\"$device\"} * on(device) group_left(model) xpu_gpu_info)",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "refId": "B",
+              "expr": "max by (device, model) ((xpu_gpu_bar_bytes{device=~\"$device\"} >= bool on(device) (0.99 * xpu_gpu_memory_total_bytes)) * on(device) group_left(model) xpu_gpu_info)",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "refId": "C",
+              "expr": "max by (device, model) (xpu_gpu_bar_bytes{device=~\"$device\"} * on(device) group_left(model) xpu_gpu_info)",
+              "legendFormat": "",
+              "range": false,
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "device": "GPU",
+                  "model": "Model",
+                  "Value #A": "Reset",
+                  "Value #B": "ReBAR",
+                  "Value #C": "BAR window"
+                },
+                "indexByName": {
+                  "device": 0,
+                  "model": 1,
+                  "Value #A": 2,
+                  "Value #B": 3,
+                  "Value #C": 4
+                }
+              }
+            }
+          ]
         }
       ]
     }

@@ -25,7 +25,8 @@ var legendSections = []legendSection{
 		{"vcs / vecs", "Video decode, and video encode/enhance. Idle on an inference box."},
 	}},
 	{"POWER — how hard, and what is holding it back", []legendEntry{
-		{"POWER W", "Draw against the cap the hardware reports, not a hardcoded TDP. A tag beside it names whatever is currently limiting the card."},
+		{"POWER W", "Draw against the limit the driver reports, not a hardcoded TDP: the card's own limit, or on cards that publish none (the A40 on xe) the package's. A tag beside it names whatever is currently limiting the card."},
+		{"spike limit", "In Detail: the ceiling on millisecond-long power spikes. Often about twice the cap; the cap is what the card can draw for longer than that."},
 		{"PL1", "Sustained power limit: held at its long-run average cap."},
 		{"PL2", "Burst power limit: pinned at the cap and would go faster with more budget. This is the expected state under a full load, not a fault."},
 		{"PL4", "Peak current limit: clocks pulled back pre-emptively to stop a current spike."},
@@ -58,6 +59,19 @@ var legendSections = []legendSection{
 		{"act idle", "In Detail: the actual clock reads 0 because the tile is parked in a c6 window. Expected at idle, not a failed reading."},
 		{"gt0 / gt1", "The two graphics tiles: gt0 does render and compute, gt1 does media."},
 		{"gt-c0 / gt-c6", "Tile power state. c0 is active, c6 is idle."},
+	}},
+	{"DETAIL — the card itself", []legendEntry{
+		{"type", "Memory type, bus width and channel count, as the driver reports them; parts it does not report are left out."},
+		{"rebar", "Resizable BAR: how much VRAM the CPU can map at once. \"on\" means all of it. Without it the window is 256 MiB, which costs Arc cards a lot of performance; turn it on in the firmware setup."},
+		{"oprom", "Option ROM (card firmware) code and data versions."},
+		{"health", "Shown only when it matters: \"reset required\" (in red) when the driver says the card is wedged or needs a reset to finish a repair."},
+		{"ecc", "Error-correcting memory mode, or \"not supported\" on cards without it."},
+	}},
+	{"TRENDS", []legendEntry{
+		{"stripes", "Every card on one chart per metric as a filled area, alternating colours where cards overlap. The default for two cards."},
+		{"lines", "Every card on one chart per metric as a line. The default for three cards, where stripes already turn into a weave."},
+		{"per card", "A small graph per card, shaded green to amber to red by value against the scale in the box's corner. The default from four cards; s switches braille (finer) and block (bolder)."},
+		{"v", "Cycles stripes, lines and per card. The choice is saved and then used at any card count."},
 	}},
 	{"WHEN A READING IS NOT LIVE", []legendEntry{
 		{"--", "No value. Either the hardware does not report it, or it has been missing long enough that showing the last one would be misleading."},

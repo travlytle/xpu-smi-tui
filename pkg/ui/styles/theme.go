@@ -3,6 +3,7 @@ package styles
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -18,6 +19,7 @@ type Theme struct {
 	Bg, CardBg, Border, Grid   string
 	Text, Muted, Subtle        string
 	GPU0, GPU1                 string
+	MoreGPUs                   []string // colours for cards 2 and up
 	badges                     *badgeColors
 }
 
@@ -32,6 +34,7 @@ var Themes = []Theme{
 		Bg: "#0F172A", CardBg: "#1E293B", Border: "#334155", Grid: "#334155",
 		Text: "#F8FAFC", Muted: "#94A3B8", Subtle: "#64748B",
 		GPU0: "#00F5FF", GPU1: "#E056FD",
+		MoreGPUs: []string{"#FACC15", "#4ADE80", "#FB923C", "#818CF8", "#F87171", "#E2E8F0"},
 		badges: &badgeColors{
 			okFg: "#065F46", okBg: "#A7F3D0", warnFg: "#92400E", warnBg: "#FDE68A",
 			dangerFg: "#991B1B", dangerBg: "#FECACA", infoFg: "#1E40AF", infoBg: "#BFDBFE",
@@ -44,6 +47,7 @@ var Themes = []Theme{
 		Bg: "#282A36", CardBg: "#44475A", Border: "#6272A4", Grid: "#44475A",
 		Text: "#F8F8F2", Muted: "#BFBFBF", Subtle: "#6272A4",
 		GPU0: "#8BE9FD", GPU1: "#FF79C6",
+		MoreGPUs: []string{"#F1FA8C", "#50FA7B", "#FFB86C", "#BD93F9", "#FF5555", "#F8F8F2"},
 	},
 	{
 		Name: "nord", Paint: true, Primary: "#88C0D0", Secondary: "#5E81AC", Accent: "#B48EAD",
@@ -51,6 +55,7 @@ var Themes = []Theme{
 		Bg: "#2E3440", CardBg: "#3B4252", Border: "#4C566A", Grid: "#3B4252",
 		Text: "#ECEFF4", Muted: "#D8DEE9", Subtle: "#7B88A1",
 		GPU0: "#88C0D0", GPU1: "#B48EAD",
+		MoreGPUs: []string{"#EBCB8B", "#A3BE8C", "#D08770", "#5E81AC", "#BF616A", "#ECEFF4"},
 	},
 	{
 		Name: "gruvbox", Paint: true, Primary: "#83A598", Secondary: "#458588", Accent: "#D3869B",
@@ -58,6 +63,7 @@ var Themes = []Theme{
 		Bg: "#282828", CardBg: "#3C3836", Border: "#504945", Grid: "#3C3836",
 		Text: "#EBDBB2", Muted: "#BDAE93", Subtle: "#928374",
 		GPU0: "#8EC07C", GPU1: "#D3869B",
+		MoreGPUs: []string{"#FABD2F", "#B8BB26", "#FE8019", "#83A598", "#FB4934", "#EBDBB2"},
 	},
 	{
 		Name: "catppuccin-mocha", Paint: true, Primary: "#89DCEB", Secondary: "#89B4FA", Accent: "#CBA6F7",
@@ -65,6 +71,7 @@ var Themes = []Theme{
 		Bg: "#1E1E2E", CardBg: "#313244", Border: "#45475A", Grid: "#313244",
 		Text: "#CDD6F4", Muted: "#A6ADC8", Subtle: "#7F849C",
 		GPU0: "#89DCEB", GPU1: "#F5C2E7",
+		MoreGPUs: []string{"#F9E2AF", "#A6E3A1", "#FAB387", "#CBA6F7", "#F38BA8", "#B4BEFE"},
 	},
 	{
 		Name: "catppuccin-latte", Paint: true, Primary: "#1E66F5", Secondary: "#04A5E5", Accent: "#8839EF",
@@ -72,6 +79,7 @@ var Themes = []Theme{
 		Bg: "#EFF1F5", CardBg: "#CCD0DA", Border: "#ACB0BE", Grid: "#CCD0DA",
 		Text: "#4C4F69", Muted: "#5C5F77", Subtle: "#8C8FA1",
 		GPU0: "#209FB5", GPU1: "#EA76CB",
+		MoreGPUs: []string{"#DF8E1D", "#40A02B", "#FE640B", "#8839EF", "#D20F39", "#1E66F5"},
 	},
 	{
 		Name: "tokyo-night", Paint: true, Primary: "#7DCFFF", Secondary: "#7AA2F7", Accent: "#BB9AF7",
@@ -79,6 +87,7 @@ var Themes = []Theme{
 		Bg: "#1A1B26", CardBg: "#24283B", Border: "#414868", Grid: "#292E42",
 		Text: "#C0CAF5", Muted: "#A9B1D6", Subtle: "#565F89",
 		GPU0: "#7DCFFF", GPU1: "#BB9AF7",
+		MoreGPUs: []string{"#E0AF68", "#9ECE6A", "#FF9E64", "#7AA2F7", "#F7768E", "#C0CAF5"},
 	},
 	{
 		Name: "solarized-dark", Paint: true, Primary: "#2AA198", Secondary: "#268BD2", Accent: "#6C71C4",
@@ -86,6 +95,7 @@ var Themes = []Theme{
 		Bg: "#002B36", CardBg: "#073642", Border: "#586E75", Grid: "#073642",
 		Text: "#EEE8D5", Muted: "#93A1A1", Subtle: "#657B83",
 		GPU0: "#2AA198", GPU1: "#D33682",
+		MoreGPUs: []string{"#B58900", "#859900", "#CB4B16", "#6C71C4", "#DC322F", "#268BD2"},
 	},
 	{
 		Name: "one-dark", Paint: true, Primary: "#56B6C2", Secondary: "#61AFEF", Accent: "#C678DD",
@@ -93,6 +103,7 @@ var Themes = []Theme{
 		Bg: "#282C34", CardBg: "#3E4451", Border: "#4B5263", Grid: "#3E4451",
 		Text: "#ABB2BF", Muted: "#9DA5B4", Subtle: "#5C6370",
 		GPU0: "#56B6C2", GPU1: "#C678DD",
+		MoreGPUs: []string{"#E5C07B", "#98C379", "#D19A66", "#61AFEF", "#E06C75", "#ABB2BF"},
 	},
 	{
 		Name: "monokai", Paint: true, Primary: "#66D9EF", Secondary: "#66D9EF", Accent: "#AE81FF",
@@ -100,6 +111,7 @@ var Themes = []Theme{
 		Bg: "#272822", CardBg: "#3E3D32", Border: "#49483E", Grid: "#3E3D32",
 		Text: "#F8F8F2", Muted: "#CFCFC2", Subtle: "#75715E",
 		GPU0: "#66D9EF", GPU1: "#AE81FF",
+		MoreGPUs: []string{"#E6DB74", "#A6E22E", "#FD971F", "#F92672", "#CFCFC2", "#F8F8F2"},
 	},
 	{
 		Name: "rose-pine", Paint: true, Primary: "#9CCFD8", Secondary: "#31748F", Accent: "#C4A7E7",
@@ -107,7 +119,38 @@ var Themes = []Theme{
 		Bg: "#191724", CardBg: "#26233A", Border: "#403D52", Grid: "#26233A",
 		Text: "#E0DEF4", Muted: "#908CAA", Subtle: "#6E6A86",
 		GPU0: "#9CCFD8", GPU1: "#EBBCBA",
+		MoreGPUs: []string{"#F6C177", "#31748F", "#C4A7E7", "#EB6F92", "#E0DEF4", "#908CAA"},
 	},
+}
+
+// GPUColor is card n's colour: GPU0, GPU1, then the theme's further colours,
+// repeating past the end.
+func GPUColor(n int) color.Color {
+	t := Current()
+	all := append([]string{t.GPU0, t.GPU1}, t.MoreGPUs...)
+	if n < 0 {
+		n = 0
+	}
+	return lipgloss.Color(all[n%len(all)])
+}
+
+// Heat is the theme's cool-to-hot colour at t in [0,1]: Success, through
+// Warning, to Danger. Graphs shade by value with it, as btop does.
+func Heat(t float64) color.Color {
+	th := Current()
+	t = math.Max(0, math.Min(1, t))
+	if t < 0.5 {
+		return lerpHex(th.Success, th.Warning, t*2)
+	}
+	return lerpHex(th.Warning, th.Danger, (t-0.5)*2)
+}
+
+func lerpHex(a, b string, t float64) color.Color {
+	var ar, ag, ab, br, bg, bb int
+	fmt.Sscanf(a, "#%02x%02x%02x", &ar, &ag, &ab)
+	fmt.Sscanf(b, "#%02x%02x%02x", &br, &bg, &bb)
+	mix := func(x, y int) uint8 { return uint8(math.Round(float64(x) + (float64(y)-float64(x))*t)) }
+	return color.RGBA{mix(ar, br), mix(ag, bg), mix(ab, bb), 255}
 }
 
 // ThemeNames lists the names accepted by SetTheme.

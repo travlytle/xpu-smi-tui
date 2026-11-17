@@ -98,6 +98,9 @@ func statsFromSysman(cur, prev sysman.Sample, havePrev bool, bdf string, deviceI
 		Timestamp:   now,
 		Tiles:       make(map[string]TileDetails),
 	}
+	if cur.HaveState {
+		st.ResetRequired, st.ResetReasons, st.Repaired = cur.ResetRequired, cur.ResetReasons, cur.Repaired
+	}
 
 	if cur.HaveMemory && cur.MemSize > 0 {
 		used := float64(cur.MemSize - min(cur.MemFree, cur.MemSize))
@@ -213,6 +216,12 @@ func (s *sysmanSource) discover(sysfs *SysfsCollector, hold func(bdf string) boo
 			EccCorrected:   "N/A",
 			EccUncorrected: "N/A",
 			CPUAffinity:    sysfs.CPUAffinity(d.BDF),
+			EccSupported:   map[int]string{0: "no", 1: "yes"}[d.ECCAvailable],
+			OptionROM:      d.OptionROM,
+			BARBytes:       d.BARBytes,
+			MemoryType:     d.MemoryType,
+			MemoryBusWidth: d.MemoryBusWidth,
+			MemoryChannels: d.MemoryChannels,
 		}
 		if d.VendorID == 0x8086 {
 			info.VendorName = "Intel(R) Corporation"

@@ -78,14 +78,22 @@ type Config struct {
 	DefaultDevice   int
 	GPUOrder        []string // PCI addresses, in the order GPUs are numbered
 	IdlePolicy      xpu.IdlePolicy
+	DemoCards       int // simulated cards in demo mode; 0 = DefaultDemoCards
 }
+
+// DefaultDemoCards is how many simulated cards --demo shows.
+const DefaultDemoCards = 6
 
 // NewModel initializes the application model
 func NewModel(cfg Config) *Model {
 	cli := xpu.NewLiveCollector()
 	cli.SetGPUOrder(cfg.GPUOrder)
 	cli.SetIdlePolicy(cfg.IdlePolicy)
-	mock := xpu.NewMockCollector()
+	cards := cfg.DemoCards
+	if cards <= 0 {
+		cards = DefaultDemoCards
+	}
+	mock := xpu.NewMockCollector().WithDevices(cards)
 
 	var activeCol xpu.Collector = cli
 	if cfg.DemoMode {
@@ -549,6 +557,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t := styles.NextTheme()
 			msg := "Theme: " + t.Name
 			if err := saveTheme(t.Name); err != nil {
+				msg += " (not saved: " + err.Error() + ")"
+			}
+			cmds = append(cmds, m.setStatus(msg, 2*time.Second))
+
+		case "s":
+			components.Symbols = 1 - components.Symbols
+			msg := "Graphs: " + components.Symbols.String()
+			if err := savePref("graph", components.Symbols.String()); err != nil {
+				msg += " (not saved: " + err.Error() + ")"
+			}
+			cmds = append(cmds, m.setStatus(msg, 2*time.Second))
+
+		case "v":
+			views.Style = views.NextStyle(len(m.gpus))
+			msg := "Trends: " + views.Style.String()
+			if err := savePref("trends", views.Style.String()); err != nil {
 				msg += " (not saved: " + err.Error() + ")"
 			}
 			cmds = append(cmds, m.setStatus(msg, 2*time.Second))

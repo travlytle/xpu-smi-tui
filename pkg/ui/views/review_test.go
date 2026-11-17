@@ -1,7 +1,9 @@
 package views
 
 import (
+	"fmt"
 	"image/color"
+	"os"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -183,9 +185,18 @@ func TestAccentDistinctForThreeCards(t *testing.T) {
 // threeCards builds combined data for a simulated three-card machine.
 func threeCards(t *testing.T) []*xpu.GPUCombined {
 	t.Helper()
-	mock := xpu.NewMockCollector().WithDevices(3)
+	return nCards(t, 3)
+}
+
+// nCards builds combined data for a simulated n-card machine.
+func nCards(t *testing.T, n int) []*xpu.GPUCombined {
+	t.Helper()
+	mock := xpu.NewMockCollector().WithDevices(n)
 	devs, _ := mock.Discover(nil)
-	ids := []int{0, 1, 2}
+	ids := make([]int, n)
+	for i := range ids {
+		ids[i] = i
+	}
 	stats, _ := mock.CollectStats(nil, ids)
 	health, _ := mock.CollectHealth(nil)
 	var gpus []*xpu.GPUCombined
@@ -221,6 +232,68 @@ func TestThreeCardsRenderEverywhere(t *testing.T) {
 		for name, out := range map[string]string{"overview": over, "trends": trends, "detail": RenderDetail(gpus[2], nil, w, 60)} {
 			if got := widestLine(out); got > w {
 				t.Errorf("%s at width %d renders %d columns with 3 cards", name, w, got)
+			}
+		}
+	}
+}
+
+// Three or more cards share one set of charts, one line per card, instead of
+// a stacked block per card.
+func TestManyCardsShareOneSetOfCharts(t *testing.T) {
+	gpus := nCards(t, 8)
+	for _, w := range []int{80, 120, 160} {
+		out := RenderTrends(gpus, -1, w, 60)
+		plain := stripANSIViews(out)
+		if c := strings.Count(plain, "Power Draw"); c != 1 {
+			t.Errorf("width %d: %d power charts for 8 cards, want 1", w, c)
+		}
+		for i := 0; i < 8; i++ {
+			if id := fmt.Sprintf("GPU %d", i); !strings.Contains(plain, id) {
+				t.Errorf("width %d: legend omits %s", w, id)
+			}
+		}
+		if got := widestLine(out); got > w {
+			t.Errorf("width %d: renders %d columns", w, got)
+		}
+		if dump := os.Getenv("XPU_DUMP_TRENDS"); dump != "" && w == 160 {
+			os.WriteFile(dump, []byte(out), 0o644)
+		}
+	}
+}
+
+// Without a choice each card count gets the style that reads best; a choice
+// made with v holds at any count, and v cycles through all three.
+func TestTrendsStyleByCardCount(t *testing.T) {
+	defer func() { Style = StyleAuto }()
+	for n, want := range map[int]TrendsStyle{2: StyleStripes, 3: StyleLines, 4: StylePerCard, 8: StylePerCard} {
+		if got := StyleFor(n); got != want {
+			t.Errorf("auto, %d cards: %v, want %v", n, got, want)
+		}
+	}
+	Style = StyleStripes
+	if StyleFor(8) != StyleStripes {
+		t.Error("a chosen style is ignored at 8 cards")
+	}
+	seen := map[TrendsStyle]bool{}
+	for i := 0; i < 3; i++ {
+		Style = NextStyle(6)
+		seen[Style] = true
+	}
+	if len(seen) != 3 {
+		t.Errorf("v visits %v, want all three styles", seen)
+	}
+	if ParseTrendsStyle("per card") != StylePerCard || ParseTrendsStyle("junk") != StyleAuto {
+		t.Error("ParseTrendsStyle")
+	}
+	for _, st := range []TrendsStyle{StyleStripes, StyleLines, StylePerCard} {
+		Style = st
+		for _, n := range []int{2, 3, 6} {
+			out := RenderTrends(nCards(t, n), -1, 160, 60)
+			if c := strings.Count(stripANSIViews(out), "Power Draw"); c != 1 {
+				t.Errorf("%v, %d cards: %d power charts, want 1", st, n, c)
+			}
+			if w := widestLine(out); w > 160 {
+				t.Errorf("%v, %d cards: %d columns wide", st, n, w)
 			}
 		}
 	}

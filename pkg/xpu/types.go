@@ -35,6 +35,13 @@ type DeviceInfo struct {
 	// when unknown.
 	CPUAffinity string
 
+	EccSupported   string // "yes", "no", or "" if unknown
+	OptionROM      string // option ROM version string as the firmware reports it
+	BARBytes       uint64 // the VRAM the CPU can map (Resizable BAR); 0 unknown
+	MemoryType     string // "GDDR6"
+	MemoryBusWidth int    // bits; 0 unknown
+	MemoryChannels int    // 0 unknown
+
 	// number is the stable number this card is shown as; see numbering.go.
 	number   int
 	numbered bool
@@ -69,6 +76,11 @@ type GPUStats struct {
 	DeviceType  string
 	Integrated  bool
 	Timestamp   time.Time
+	// ResetRequired is the driver saying the card must be reset (wedged, or
+	// to finish a repair); ResetReasons says why.
+	ResetRequired bool
+	ResetReasons  []string
+	Repaired      bool
 	// PowerW is the card's draw averaged over the sample window: one second
 	// from the dump stream, ~0.2 s from a direct stats call. The window's own
 	// min/avg/max are not kept -- over 0.2 s they were three copies of the

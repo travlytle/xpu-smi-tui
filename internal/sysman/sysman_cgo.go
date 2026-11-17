@@ -48,7 +48,10 @@ func Open() (*Sysman, error) {
 			VendorID: uint32(info.vendor_id), DeviceID: uint32(info.device_id),
 			UUID: formatUUID(uuid), DriverVersion: C.GoString(&info.driver_version[0]),
 			GFXFirmware: C.GoString(&info.gfx_firmware[0]), MaxFreqMHz: float64(info.freq_max_mhz),
-			ECC: eccName(int(info.ecc_state)), Integrated: info.integrated != 0,
+			ECC: eccName(int(info.ecc_state)), ECCAvailable: int(info.ecc_available),
+			Integrated: info.integrated != 0, OptionROM: C.GoString(&info.oprom_firmware[0]),
+			BARBytes: uint64(info.bar_bytes), MemoryType: memTypeName(int(info.mem_type)),
+			MemoryBusWidth: positive(int(info.mem_bus_width)), MemoryChannels: positive(int(info.mem_channels)),
 		})
 	}
 	return s, nil
@@ -72,6 +75,8 @@ func (s *Sysman) Sample(index int) (Sample, error) {
 		BWMax: uint64(raw.bw_max), BWTimestampUS: uint64(raw.bw_ts),
 		HavePCI: raw.have_pci != 0, PCIRx: uint64(raw.pci_rx), PCITx: uint64(raw.pci_tx),
 		PCITimestampU: uint64(raw.pci_ts),
+		HaveState:     raw.have_state != 0, ResetRequired: raw.reset_reasons != 0,
+		ResetReasons: resetReasons(uint32(raw.reset_reasons)), Repaired: raw.repaired == 2,
 	}
 	for i := 0; i < int(raw.ntemp); i++ {
 		out.Temps = append(out.Temps, Temp{Type: int(raw.temp[i]._type), C: float64(raw.temp[i].c)})

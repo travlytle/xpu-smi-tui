@@ -37,6 +37,7 @@ func main() {
 		idlePoll     = flag.String("idle-poll", os.Getenv("XPU_IDLE_POLL"), "Seconds between samples of a runtime-suspended card, which is otherwise left alone because reading it wakes it and roughly doubles its draw: a number, 0 to never wake one, or off to always poll (default 30; also $XPU_IDLE_POLL)")
 		gpuOrder     = flag.String("gpu-order", os.Getenv("XPU_GPU_ORDER"), "PCI addresses in the order GPUs are numbered, e.g. 03:00.0,04:00.0 (default: PCI address order; also $XPU_GPU_ORDER)")
 		themeName    = flag.String("theme", os.Getenv("XPU_THEME"), "Colour theme: "+strings.Join(styles.ThemeNames(), ", ")+" (default: last chosen with t; also $XPU_THEME)")
+		demoCards    = flag.Int("demo-cards", ui.DefaultDemoCards, "Simulated cards in demo mode, 1-16 (implies --demo)")
 		versionFlag  = flag.Bool("version", false, "Print version and exit")
 		shortVersion = flag.Bool("v", false, "Print version and exit (shorthand)")
 	)
@@ -66,6 +67,15 @@ func main() {
 	}
 
 	demo := *demoMode || *shortDemo
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "demo-cards" {
+			demo = true
+		}
+	})
+	if *demoCards < 1 || *demoCards > 16 {
+		fmt.Fprintln(os.Stderr, "--demo-cards must be between 1 and 16")
+		os.Exit(2)
+	}
 
 	idle, err := xpu.ParseIdlePolicy(*idlePoll)
 	if err != nil {
@@ -85,12 +95,15 @@ func main() {
 		_ = styles.SetTheme("default") // a stale saved name is not fatal
 	}
 
+	ui.LoadGraphPrefs()
+
 	config := ui.Config{
 		RefreshInterval: time.Duration(interval) * time.Second,
 		DemoMode:        demo,
 		DefaultDevice:   *deviceIdx,
 		GPUOrder:        xpu.ParseGPUOrder(*gpuOrder),
 		IdlePolicy:      idle,
+		DemoCards:       *demoCards,
 	}
 
 	model := ui.NewModel(config)
