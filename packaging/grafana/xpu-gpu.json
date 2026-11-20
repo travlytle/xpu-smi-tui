@@ -1628,7 +1628,7 @@
           "id": 404,
           "type": "timeseries",
           "title": "Core clock",
-          "description": "Actual frequency; reads 0 while the card's render engine sleeps in its deepest idle state (C6). Dashed grey = hardware maximum.",
+          "description": "Clock while the render engine is working; 0 when it slept through the poll (C6). Below the dashed grey maximum while busy means throttling.",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"

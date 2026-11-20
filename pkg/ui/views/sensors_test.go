@@ -212,12 +212,12 @@ func TestRenderGTSummaryFitsNarrowColumns(t *testing.T) {
 	}
 }
 
-// act_freq reads 0 whenever the GT is parked in a c6 window. That is the
-// hardware idling, not a failed read.
-func TestRenderGTSummaryLabelsIdleClock(t *testing.T) {
-	out := RenderGTSummary(sysfsFixture(), 160)
-	if !strings.Contains(out, "act idle") {
-		t.Errorf("a zero act_freq should read as idle, not 0 MHz:\n%s", out)
+// act_freq reads 0 whenever the GT is parked in a c6 window: a stopped clock,
+// shown as a number like every other clock reading.
+func TestRenderGTSummaryShowsParkedClockAsZero(t *testing.T) {
+	out := stripANSIViews(RenderGTSummary(sysfsFixture(), 160))
+	if !strings.Contains(out, "act    0") || strings.Contains(out, "idle") {
+		t.Errorf("a zero act_freq should read act 0:\n%s", out)
 	}
 }
 

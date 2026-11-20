@@ -18,9 +18,13 @@ func TestClockPrefersActualAndReportsParked(t *testing.T) {
 		// A busy card sampled inside one of its c6 gaps: not parked, and the
 		// requested clock is the best estimate of what the work runs at.
 		"busy but sampled in a c6 gap": {GPUStats{FrequencyMHz: 2800, Sysfs: gt(0, 60, true)}, 2800, false},
-		"no busy reading yet, act 0":   {GPUStats{FrequencyMHz: 2800, Sysfs: gt(0, 0, false)}, 0, true},
-		"sysman only, actual known":    {GPUStats{FrequencyMHz: 2800, ActualFrequencyMHz: 600}, 600, false},
-		"sysman only, actual 0":        {GPUStats{FrequencyMHz: 600}, 600, false},
+		// Idle B70: residency noise reads a few percent busy, request at 2800.
+		"idle with busy noise":       {GPUStats{FrequencyMHz: 2800, Sysfs: gt(0, 6.6, true)}, 0, true},
+		"idle, sample caught a wake": {GPUStats{FrequencyMHz: 2800, Sysfs: gt(2800, 3, true)}, 0, true},
+		"first poll, actual known":   {GPUStats{FrequencyMHz: 2800, Sysfs: gt(2350, 0, false)}, 2350, false},
+		"no busy reading yet, act 0": {GPUStats{FrequencyMHz: 2800, Sysfs: gt(0, 0, false)}, 0, true},
+		"sysman only, actual known":  {GPUStats{FrequencyMHz: 2800, ActualFrequencyMHz: 600}, 600, false},
+		"sysman only, actual 0":      {GPUStats{FrequencyMHz: 600}, 600, false},
 	}
 	for name, c := range cases {
 		mhz, parked := c.s.Clock()

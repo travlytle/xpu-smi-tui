@@ -330,7 +330,7 @@ func clockValue(g *xpu.GPUCombined) string {
 	cur := fmt.Sprintf("%4.0f", mhz)
 	style := styles.RegularText
 	if parked {
-		cur, style = "idle", styles.SubtleText
+		style = styles.SubtleText // 0: parked, clock stopped
 	}
 	if g.Info.MaxFrequencyMHz <= 0 {
 		return style.Render(cur)

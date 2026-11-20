@@ -10,16 +10,20 @@ package xpu
 // on an idle card. The actual clock reads 0 while parked, which is the
 // truthful figure, but it also reads 0 when a once-a-second sample happens to
 // land in one of the c6 gaps a busy card cycles through many times a second.
-// So: actual when it is nonzero; while it reads 0, "parked" only if the GT is
-// not busy either, and the requested clock (a fair estimate of what the work is
-// running at) when it is.
+// So the busy share over the interval decides: under parkedBusy% the GT was
+// asleep (gtidle residency reads a few percent of noise on an idle card, which
+// used to pass a 5% test and show the latched 2800); otherwise the actual
+// clock, or the requested one when the sample caught a gap. Without a busy
+// reading, actual 0 is parked.
 func (s *GPUStats) Clock() (mhz float64, parked bool) {
 	if s.Sysfs != nil && s.Sysfs.Available && len(s.Sysfs.GTs) > 0 {
 		gt := s.Sysfs.GTs[0] // render/compute
-		if gt.Freq.ActMHz > 0 {
+		switch {
+		case gt.Idle.BusyValid && gt.Idle.BusyPercent < parkedBusy:
+			return 0, true
+		case gt.Freq.ActMHz > 0:
 			return gt.Freq.ActMHz, false
-		}
-		if gt.Idle.BusyValid && gt.Idle.BusyPercent > 5 {
+		case gt.Idle.BusyValid:
 			return s.FrequencyMHz, false
 		}
 		return 0, true
@@ -29,3 +33,6 @@ func (s *GPUStats) Clock() (mhz float64, parked bool) {
 	}
 	return s.FrequencyMHz, false // nothing says it is parked; show what there is
 }
+
+// parkedBusy is the busy share below which the render GT counts as parked.
+const parkedBusy = 10

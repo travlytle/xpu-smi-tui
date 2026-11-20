@@ -232,11 +232,11 @@ func RenderGTSummary(st *xpu.SysfsStats, width int) string {
 				Render(fmt.Sprintf("  busy %5.1f%%", gt.Idle.BusyPercent))
 		}
 
-		// act_freq reads 0 whenever the GT is parked in a c6 window. That is the
-		// hardware idling, not a failed read, so say so rather than showing 0 MHz.
-		actual := fmt.Sprintf("act %4.0f", gt.Freq.ActMHz)
+		// act_freq reads 0 whenever the GT is parked in a c6 window: the clock
+		// is stopped. Dimmed so it reads as asleep rather than a failed read.
+		actual := styles.RegularText.Render(fmt.Sprintf("act %4.0f", gt.Freq.ActMHz))
 		if gt.Freq.ActMHz == 0 {
-			actual = "act idle"
+			actual = styles.SubtleText.Render("act    0")
 		}
 
 		parts := []string{styles.SubtleText.Render(fmt.Sprintf("  %-4s", gt.Name))}
@@ -244,7 +244,7 @@ func RenderGTSummary(st *xpu.SysfsStats, width int) string {
 			parts = append(parts, styles.MutedText.Render(fmt.Sprintf("%-15s", role)))
 		}
 		parts = append(parts, busy,
-			styles.RegularText.Render(fmt.Sprintf("   cur %4.0f  %s  MHz", gt.Freq.CurMHz, actual)))
+			styles.RegularText.Render(fmt.Sprintf("   cur %4.0f  ", gt.Freq.CurMHz))+actual+styles.RegularText.Render("  MHz"))
 		if showLimits {
 			parts = append(parts, styles.SubtleText.Render(fmt.Sprintf("   floor %.0f / ceil %.0f",
 				gt.Freq.MinMHz, gt.Freq.MaxMHz)))

@@ -204,12 +204,7 @@ func RenderMultiTimeSeriesChart(opt MultiChartOptions) string {
 		}
 	}
 
-	guideRows := map[int]bool{}
-	if opt.Height >= 5 {
-		guideRows[opt.Height/4] = true
-		guideRows[opt.Height/2] = true
-		guideRows[(3*opt.Height)/4] = true
-	}
+	axisLabels, guideRows := yAxis(lo, hi, opt.Height)
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorText).Render(opt.Title)
 	var entries []string
@@ -234,21 +229,7 @@ func RenderMultiTimeSeriesChart(opt MultiChartOptions) string {
 	chart := canvas.render(colors, guideRows)
 	rows := make([]string, 0, opt.Height)
 	for r := 0; r < opt.Height; r++ {
-		yVal := lo + (1-float64(r)/float64(opt.Height-1))*span
-		var label string
-		switch {
-		case math.Abs(yVal) >= 1000:
-			label = fmt.Sprintf("%5.0f", yVal)
-		case math.Abs(yVal) >= 10:
-			label = fmt.Sprintf("%5.1f", yVal)
-		default:
-			label = fmt.Sprintf("%5.2f", yVal)
-		}
-		tick := "┤"
-		if guideRows[r] {
-			tick = "┼"
-		}
-		rows = append(rows, axis.Render(fmt.Sprintf("%-6.6s%s", label, tick))+chart[r])
+		rows = append(rows, axis.Render(axisLabels[r])+chart[r])
 	}
 
 	left, right := axis.Render(opt.TimeWindow), axis.Render("now")

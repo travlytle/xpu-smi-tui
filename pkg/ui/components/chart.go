@@ -147,9 +147,6 @@ func (c *BrailleCanvas) RenderLines(fg color.Color, guideRows map[int]bool) []st
 	return lines
 }
 
-// axisPrefixWidth is the fixed width of the y-axis label and its tick, "275.0 ┤".
-const axisPrefixWidth = 7
-
 // fitHeader lays a chart's title and its right-hand legend out in width
 // columns: on one row when both fit, otherwise the legend goes on a row of its
 // own, and if it cannot fit even there it is cut to width.
@@ -273,13 +270,7 @@ func RenderTimeSeriesChart(values []float64, opt ChartOptions) string {
 		}
 	}
 
-	// Guide rows for horizontal gridlines (at 25%, 50%, 75% height)
-	guideRows := make(map[int]bool)
-	if opt.Height >= 5 {
-		guideRows[opt.Height/2] = true
-		guideRows[opt.Height/4] = true
-		guideRows[(3*opt.Height)/4] = true
-	}
+	axisLabels, guideRows := yAxis(displayMin, displayMax, opt.Height)
 
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorText)
 	valStyle := lipgloss.NewStyle().Bold(true).Foreground(opt.Color)
@@ -294,27 +285,9 @@ func RenderTimeSeriesChart(values []float64, opt ChartOptions) string {
 	var plotRows []string
 
 	axisStyle := lipgloss.NewStyle().Foreground(styles.ColorSubtle)
-	span := displayMax - displayMin
 
 	for row := 0; row < opt.Height; row++ {
-		ratio := 1.0 - (float64(row) / float64(opt.Height-1))
-		yVal := displayMin + (ratio * span)
-
-		var axisLabel string
-		if math.Abs(yVal) >= 1000 {
-			axisLabel = fmt.Sprintf("%5.0f %s", yVal, opt.Unit)
-		} else if math.Abs(yVal) >= 10 {
-			axisLabel = fmt.Sprintf("%5.1f", yVal)
-		} else {
-			axisLabel = fmt.Sprintf("%5.2f", yVal)
-		}
-
-		tick := "┤"
-		if guideRows[row] {
-			tick = "┼"
-		}
-		axisPrefix := axisStyle.Render(fmt.Sprintf("%-6.6s%s", axisLabel, tick)) // fixed 7 cols; a 4-digit label overran by 3 and widened its row
-		plotRows = append(plotRows, fmt.Sprintf("%s%s", axisPrefix, chartLines[row]))
+		plotRows = append(plotRows, axisStyle.Render(axisLabels[row])+chartLines[row])
 	}
 
 	bottomAxis := axisStyle.Render("      └" + strings.Repeat("─", plotWidth))
@@ -662,13 +635,7 @@ func RenderDualTimeSeriesChart(opt DualChartOptions) string {
 		}
 	}
 
-	// Guide rows for horizontal gridlines (at 25%, 50%, 75% height)
-	guideRows := make(map[int]bool)
-	if opt.Height >= 5 {
-		guideRows[opt.Height/2] = true
-		guideRows[opt.Height/4] = true
-		guideRows[(3*opt.Height)/4] = true
-	}
+	axisLabels, guideRows := yAxis(displayMin, displayMax, opt.Height)
 
 	// Header: Title on Left, Dual Legends on Right
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorText)
@@ -699,24 +666,7 @@ func RenderDualTimeSeriesChart(opt DualChartOptions) string {
 	axisStyle := lipgloss.NewStyle().Foreground(styles.ColorSubtle)
 
 	for row := 0; row < opt.Height; row++ {
-		ratio := 1.0 - (float64(row) / float64(opt.Height-1))
-		yVal := displayMin + (ratio * span)
-
-		var axisLabel string
-		if math.Abs(yVal) >= 1000 {
-			axisLabel = fmt.Sprintf("%5.0f %s", yVal, opt.Unit)
-		} else if math.Abs(yVal) >= 10 {
-			axisLabel = fmt.Sprintf("%5.1f", yVal)
-		} else {
-			axisLabel = fmt.Sprintf("%5.2f", yVal)
-		}
-
-		tick := "┤"
-		if guideRows[row] {
-			tick = "┼"
-		}
-		axisPrefix := axisStyle.Render(fmt.Sprintf("%-6.6s%s", axisLabel, tick)) // fixed 7 cols; a 4-digit label overran by 3 and widened its row
-		plotRows = append(plotRows, fmt.Sprintf("%s%s", axisPrefix, chartLines[row]))
+		plotRows = append(plotRows, axisStyle.Render(axisLabels[row])+chartLines[row])
 	}
 
 	bottomAxis := axisStyle.Render("      └" + strings.Repeat("─", plotWidth))

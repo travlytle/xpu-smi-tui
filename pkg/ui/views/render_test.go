@@ -423,15 +423,15 @@ func TestRateShortScalesUnit(t *testing.T) {
 	}
 }
 
-// A parked card says so instead of showing the driver's latched request.
-func TestOverviewShowsIdleForAParkedClock(t *testing.T) {
+// A parked card shows 0, not the driver's latched request.
+func TestOverviewShowsZeroForAParkedClock(t *testing.T) {
 	gpus, _, _ := createSampleData()
 	gpus[0].Stats.FrequencyMHz = 2800
 	gpus[0].Stats.Sysfs.GTs[0].Freq.ActMHz = 0
 	gpus[0].Stats.Sysfs.GTs[0].Idle.BusyPercent = 0
 	out := stripANSIViews(RenderOverview(gpus, -1, "", 170))
-	if !strings.Contains(out, "idle/2800") {
-		t.Error("parked card's clock is not shown as idle")
+	if !strings.Contains(out, "   0/2800") {
+		t.Error("parked card's clock is not shown as 0")
 	}
 	if strings.Contains(out, "2800/2800") {
 		t.Error("the latched requested clock is shown as if the card were running at it")

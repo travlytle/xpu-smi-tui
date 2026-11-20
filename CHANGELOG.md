@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4
+
+- Trends charts keep at least 8 plot rows and grow to fill tall terminals; when they do not all fit, the view scrolls instead of flattening them.
+- Chart y axes label round values only (for example 0, 50, 100), with guide lines on those rows.
+- Clock: an idle card no longer shows its latched 2800 MHz request; under 10% busy it reads 0 (dimmed) in Overview, Detail, Trends and the exporter. A busy card below its maximum is throttling.
+- README GIF recorded at 120x45.
+
 ## 0.2.3
 
 - Trends adds Compute, Clock and Memory bandwidth, and orders every layout the same way: activity (compute, clock), power and cooling, memory (VRAM use, bandwidth), then temperatures. All charts are shown in every layout; the view scrolls when they do not fit.

@@ -45,7 +45,7 @@ func TestChartsFitTheirFrame(t *testing.T) {
 				}
 				for _, l := range lines {
 					p := plain(l)
-					if strings.Contains(p, "⣿") && !strings.Contains(p, "┤") && !strings.Contains(p, "┼") {
+					if strings.Contains(p, "⣿") && !strings.Contains(p, "┤") && !strings.HasPrefix(p, "│       │") {
 						t.Errorf("%s %dx%d: a plot row lost its axis label, it wrapped: %q", name, width, height, p)
 					}
 				}

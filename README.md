@@ -8,7 +8,7 @@
 
 Terminal dashboard and Prometheus exporter for Intel Arc GPUs. Reads Level Zero Sysman, sysfs and fdinfo directly; `xpu-smi` is not required.
 
-![xpu-smi-tui demo](docs/demo-v0.2.3.gif)
+![xpu-smi-tui demo](docs/demo-v0.2.4-r2.gif)
 
 ## Install
 

@@ -167,9 +167,16 @@ func chartLayout(boxWidth, height, n int) (chartW int, twoColumn bool, chartH in
 	}
 	// Each chart spends 6 rows on border, header (a legend may wrap to a
 	// second row), axis and time labels, plus the blank row between rows.
-	chartH = clamp((height-rows)/rows-6, 4, 8)
+	chartH = clamp((height-rows)/rows-6, minChartH, maxChartH)
 	return chartW, twoColumn, chartH
 }
+
+// Plot rows per chart: charts grow to fill the view but never shrink below
+// minChartH (32 braille dots); the view scrolls instead.
+const (
+	minChartH = 8
+	maxChartH = 16
+)
 
 // renderSmallMultiples gives each metric a box holding one small filled
 // graph per card, shaded by value, btop style. It scales to many cards where
@@ -270,7 +277,7 @@ func renderOverlaidMultiGraphs(gpus []*xpu.GPUCombined, boxWidth int, height int
 	}
 	// Legends wrap to as many rows as the card count needs, so measure the
 	// tallest box at the minimum height and give the plots what is left.
-	const minH = 4
+	const minH = 4 // measuring height only
 	charts := render(minH)
 	overhead := 0
 	for _, c := range charts {
@@ -280,9 +287,7 @@ func renderOverlaidMultiGraphs(gpus []*xpu.GPUCombined, boxWidth int, height int
 	if twoColumn {
 		rows = (rows + 1) / 2
 	}
-	if h := clamp((height-(rows-1))/rows-overhead, minH, 8); h > minH {
-		charts = render(h)
-	}
+	charts = render(clamp((height-(rows-1))/rows-overhead, minChartH, maxChartH))
 	return layoutCharts(charts, twoColumn)
 }
 

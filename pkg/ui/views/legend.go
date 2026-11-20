@@ -55,8 +55,8 @@ var legendSections = []legendSection{
 		{"other", "VRAM the card reports in use that no listed process accounts for. Without sudo this is mostly the display server: other users' processes cannot be inspected, and the login screen's compositor runs as its own user. Run with sudo to list those processes by name; what remains is driver overhead."},
 	}},
 	{"CLOCKS & STATE", []legendEntry{
-		{"CLOCK MHz", "The clock the render tile is actually running at, against the hardware maximum. \"idle\" means the tile is parked (c6) and clocked to nothing. The driver's *requested* clock is deliberately not shown: it latches at the maximum after a job and stays there while the card sleeps at 7 W."},
-		{"act idle", "In Detail: the actual clock reads 0 because the tile is parked in a c6 window. Expected at idle, not a failed reading."},
+		{"CLOCK MHz", "The clock the render tile runs at while working, against the hardware maximum; below it while busy means throttling. Dimmed 0 means the tile was parked (c6) for nearly all of the last interval, its clock stopped. The driver's *requested* clock is deliberately not shown: it latches at the maximum after a job and stays there while the card sleeps at 7 W."},
+		{"act 0", "In Detail, dimmed: the tile is parked in a c6 window and its clock is stopped. Expected at idle, not a failed reading."},
 		{"gt0 / gt1", "The two graphics tiles: gt0 does render and compute, gt1 does media."},
 		{"gt-c0 / gt-c6", "Tile power state. c0 is active, c6 is idle."},
 	}},

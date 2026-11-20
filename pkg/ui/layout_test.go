@@ -179,7 +179,7 @@ func TestLegendCoversEveryTerm(t *testing.T) {
 
 	// Case-insensitive: terms are shown as they appear in the column headers.
 	lower := strings.ToLower(out)
-	for _, term := range []string{"ccs", "bcs", "workload", "%card", "last 60s", "stale", "pl1", "pl2", "vr!", "gt-c6", "act idle", "vram rd/wr", "bw %", "pcie"} {
+	for _, term := range []string{"ccs", "bcs", "workload", "%card", "last 60s", "stale", "pl1", "pl2", "vr!", "gt-c6", "act 0", "vram rd/wr", "bw %", "pcie"} {
 		if !strings.Contains(lower, term) {
 			t.Errorf("legend missing %q", term)
 		}

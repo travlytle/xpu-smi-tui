@@ -147,7 +147,7 @@ func New(col xpu.Collector, interval time.Duration, reg prometheus.Registerer) *
 
 		clock: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: ns, Name: "gpu_clock_mhz",
-			Help: "The clock the render tile is actually running at; 0 while it is parked in c6.",
+			Help: "The clock the render tile runs at while working; 0 when it spent the poll parked in c6.",
 		}, labels),
 
 		clockReq: prometheus.NewGaugeVec(prometheus.GaugeOpts{
