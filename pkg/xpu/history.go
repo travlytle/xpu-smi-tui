@@ -71,6 +71,8 @@ type MetricHistory struct {
 	Frequency  *Series
 	FanRPM     *Series
 	Busy       *Series // busiest graphics tile, from idle residency
+	Compute    *Series // compute engine (ccs) busy %, from per-client cycles
+	Bandwidth  *Series // VRAM bandwidth as % of peak
 }
 
 func NewMetricHistory(capacity int) *MetricHistory {
@@ -82,6 +84,8 @@ func NewMetricHistory(capacity int) *MetricHistory {
 		Frequency:  NewSeries(capacity),
 		FanRPM:     NewSeries(capacity),
 		Busy:       NewSeries(capacity),
+		Compute:    NewSeries(capacity),
+		Bandwidth:  NewSeries(capacity),
 	}
 }
 
@@ -106,6 +110,14 @@ func (h *MetricHistory) Record(stats GPUStats) {
 	// sample that sat on the trend line for a minute.
 	if busy, ok := busiestTile(stats); ok {
 		h.Busy.Add(busy)
+	}
+	if stats.Fdinfo != nil {
+		if ccs, ok := stats.Fdinfo.Engine("ccs"); ok && ccs.Valid {
+			h.Compute.Add(ccs.BusyPercent)
+		}
+	}
+	if !stats.TrafficUnavailable {
+		h.Bandwidth.Add(stats.MemoryBandwidthPercent)
 	}
 }
 

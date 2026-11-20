@@ -218,7 +218,11 @@ func RenderMultiTimeSeriesChart(opt MultiChartOptions) string {
 		if len(s.Values) > 0 {
 			latest = s.Values[len(s.Values)-1]
 		}
-		text := fmt.Sprintf("■ %s: %.1f %s", s.Label, latest, opt.Unit)
+		prec := 1
+		if math.Abs(latest) >= 100 {
+			prec = 0 // keeps the legend short enough to pack three to a row
+		}
+		text := fmt.Sprintf("■ %s: %.*f %s", s.Label, prec, latest, opt.Unit)
 		if len(s.Values) == 0 {
 			text = fmt.Sprintf("■ %s: --", s.Label) // the card has no such reading
 		}

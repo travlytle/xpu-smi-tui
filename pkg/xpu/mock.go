@@ -138,6 +138,7 @@ func (m *MockCollector) CollectStats(ctx context.Context, deviceIDs []int) (map[
 		memTemp := math.Max(45, baseMemTemp+math.Sin(t*0.3)*2.0+(m.rnd.Float64()-0.5)*1.5)
 		memUtil := math.Max(20, math.Min(98, baseUtil+(m.rnd.Float64()-0.5)*3.0))
 		memUsed := 28568.0 * (memUtil / 100.0)
+		freq := math.Round(math.Max(300, math.Min(2800, baseFreq+wave*12+jitter*10))/50) * 50
 
 		stats := &GPUStats{
 			DeviceIndex:            devID,
@@ -145,7 +146,7 @@ func (m *MockCollector) CollectStats(ctx context.Context, deviceIDs []int) (map[
 			DeviceType:             "discrete",
 			Timestamp:              time.Now(),
 			PowerW:                 power,
-			FrequencyMHz:           baseFreq,
+			FrequencyMHz:           freq,
 			MediaFrequencyMHz:      400.0,
 			CoreTempC:              coreTemp,
 			MemoryTempC:            memTemp,
@@ -154,14 +155,14 @@ func (m *MockCollector) CollectStats(ctx context.Context, deviceIDs []int) (map[
 			MemoryUtilPercent:      memUtil,
 			MemoryReadKBps:         math.Abs(math.Sin(t)) * 1250000,
 			MemoryWriteKBps:        math.Abs(math.Cos(t)) * 850000,
-			MemoryBandwidthPercent: math.Abs(math.Sin(t)) * 45.0,
+			MemoryBandwidthPercent: math.Abs(math.Sin(t+float64(devID))) * p.util * 0.6,
 			PcieReadKBps:           math.Abs(math.Sin(t*1.5)) * 340000,
 			PcieWriteKBps:          math.Abs(math.Cos(t*1.5)) * 120000,
 			FanSpeedRPM:            p.fan + math.Sin(t+float64(devID))*40.0 + (m.rnd.Float64()-0.5)*15.0,
 			Tiles: map[string]TileDetails{
 				"tile_0": {
 					PowerW:       TileMetric{Current: power, Avg: power * 0.98, Max: 275},
-					FrequencyMHz: TileMetric{Current: baseFreq, Avg: baseFreq, Max: 2800},
+					FrequencyMHz: TileMetric{Current: freq, Avg: freq, Max: 2800},
 					CoreTempC:    TileMetric{Current: coreTemp, Avg: coreTemp, Max: 85},
 					MemoryTempC:  TileMetric{Current: memTemp, Avg: memTemp, Max: 95},
 				},
@@ -169,6 +170,7 @@ func (m *MockCollector) CollectStats(ctx context.Context, deviceIDs []int) (map[
 		}
 		stats.FanAvailable = true
 		stats.Sysfs = m.mockSysfs(devID, t, power, coreTemp, memTemp, memUtil)
+		stats.Sysfs.GTs[0].Freq.ActMHz, stats.Sysfs.GTs[0].Freq.CurMHz = freq, freq
 		stats.Fdinfo = m.mockFdinfo(devID, t, memUtil, memUsed)
 		stats.ClientsComplete = false
 		result[devID] = stats

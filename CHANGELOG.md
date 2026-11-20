@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- Trends adds Compute, Clock and Memory bandwidth, and orders every layout the same way: activity (compute, clock), power and cooling, memory (VRAM use, bandwidth), then temperatures. All charts are shown in every layout; the view scrolls when they do not fit.
+- Lines and stripes size their charts to the legend, so 6-8 cards fit without scrolling at 140x58.
+- Demo clocks follow each card's load. README GIF updated.
+
 ## 0.2.2
 
 - The .deb now includes `xpu-exporter` and its systemd unit (it shipped only the TUI), plus the Grafana dashboard and this changelog; upgrades restart running exporters. `install.sh` installs the exporter too.

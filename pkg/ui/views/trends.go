@@ -110,17 +110,65 @@ func trendMetrics(gpus []*xpu.GPUCombined) []trendMetric {
 		}
 		return m
 	}
-	var fans [][]float64
+	var fans, clocks [][]float64
 	for _, g := range gpus {
 		fans = append(fans, g.History.FanRPM.Values())
+		clocks = append(clocks, g.History.Frequency.Values())
 	}
+	clockTop := maxOf(func(g *xpu.GPUCombined) float64 { return g.Info.MaxFrequencyMHz })
+	if clockTop <= 0 {
+		clockTop = math.Max(1000, math.Ceil(seriesPeak(clocks...)*1.1/100)*100)
+	}
+	// Grouped by what each answers, read left to right then down (two per
+	// row when wide): is it working and how fast; what it costs and how hard
+	// the cooling works; memory fill and traffic; temperatures.
 	return []trendMetric{
+		{"Compute", "%", 100, func(g *xpu.GPUCombined) []float64 { return g.History.Compute.Values() }},
+		{"Clock", "MHz", clockTop, func(g *xpu.GPUCombined) []float64 { return g.History.Frequency.Values() }},
 		{"Power Draw", "W", maxOf(PowerLimitW), func(g *xpu.GPUCombined) []float64 { return g.History.PowerW.Values() }},
-		{"Core Temperature", "°C", maxOf(CoreTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.CoreTemp.Values()) }},
-		{"VRAM Utilization", "%", 100, func(g *xpu.GPUCombined) []float64 { return g.History.MemoryUtil.Values() }},
 		{"Fan Speed", "RPM", fanScale(fans...), func(g *xpu.GPUCombined) []float64 { return g.History.FanRPM.Values() }},
+		{"VRAM Utilization", "%", 100, func(g *xpu.GPUCombined) []float64 { return g.History.MemoryUtil.Values() }},
+		{"Memory Bandwidth", "%", 100, func(g *xpu.GPUCombined) []float64 { return g.History.Bandwidth.Values() }},
+		{"Core Temperature", "°C", maxOf(CoreTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.CoreTemp.Values()) }},
 		{"Memory Temperature", "°C", maxOf(MemTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.MemoryTemp.Values()) }},
 	}
+}
+
+// layoutCharts lays charts out two to a row when wide, one per row otherwise,
+// with a blank row between rows. Every chart is shown; the viewport scrolls.
+func layoutCharts(charts []string, twoColumn bool) string {
+	var rows []string
+	step := 1
+	if twoColumn {
+		step = 2
+	}
+	for i := 0; i < len(charts); i += step {
+		if len(rows) > 0 {
+			rows = append(rows, "")
+		}
+		if step == 2 && i+1 < len(charts) {
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, charts[i], "  ", charts[i+1]))
+		} else {
+			rows = append(rows, charts[i])
+		}
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+// chartLayout is the chart width, whether charts sit two to a row, and a
+// chart height that fits the rows of charts in height where it can.
+func chartLayout(boxWidth, height, n int) (chartW int, twoColumn bool, chartH int) {
+	twoColumn = boxWidth >= 95
+	chartW = boxWidth
+	rows := n
+	if twoColumn {
+		chartW = (boxWidth - 4) / 2
+		rows = (n + 1) / 2
+	}
+	// Each chart spends 6 rows on border, header (a legend may wrap to a
+	// second row), axis and time labels, plus the blank row between rows.
+	chartH = clamp((height-rows)/rows-6, 4, 8)
+	return chartW, twoColumn, chartH
 }
 
 // renderSmallMultiples gives each metric a box holding one small filled
@@ -137,10 +185,14 @@ func renderSmallMultiples(gpus []*xpu.GPUCombined, boxWidth int, height int) str
 	if twoColumn {
 		chartW = (boxWidth - 4) / 2
 	}
-	// height is the view's own (header and footer are outside it). Three
-	// boxes stack in a column with a blank row between; each spends 4 rows
-	// on border, title and time axis.
-	perBox := max(height-2, 12)/3 - 4
+	// height is the view's own (header and footer are outside it). Boxes
+	// stack in a column with a blank row between; each spends 4 rows on
+	// border, title and time axis.
+	perColumn := len(trendMetrics(gpus))
+	if twoColumn {
+		perColumn = (perColumn + 1) / 2
+	}
+	perBox := max(height-(perColumn-1), 12)/perColumn - 4
 	rows := clamp(perBox/len(gpus), 1, 4)
 
 	labelW := 0
@@ -180,13 +232,7 @@ func renderSmallMultiples(gpus []*xpu.GPUCombined, boxWidth int, height int) str
 		boxes = append(boxes, styles.CardStyle.Width(chartW).Render(strings.Join(lines, "\n")))
 	}
 
-	if twoColumn {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.JoinHorizontal(lipgloss.Top, boxes[0], "  ", boxes[1]), "",
-			lipgloss.JoinHorizontal(lipgloss.Top, boxes[2], "  ", boxes[3]), "",
-			boxes[4])
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, boxes[0], "", boxes[1], "", boxes[2], "", boxes[3], "", boxes[4])
+	return layoutCharts(boxes, twoColumn)
 }
 
 func clamp(v, lo, hi int) int { return max(lo, min(hi, v)) }
@@ -204,61 +250,40 @@ func renderOverlaidMultiGraphs(gpus []*xpu.GPUCombined, boxWidth int, height int
 			return styles.CardStyle.Width(boxWidth + 2).Render(styles.MutedText.Render("No history yet."))
 		}
 	}
-	twoColumn := boxWidth >= 95
-	chartW := boxWidth
-	if twoColumn {
-		chartW = (boxWidth - 4) / 2
-	}
-	availH := max(height-7, 12)
-	chartH := 4
-	switch {
-	case availH >= 30 && height >= 48:
-		chartH = 8
-	case availH >= 30:
-		chartH = 7
-	case availH >= 22:
-		chartH = 6
-	}
-
-	series := func(values func(*xpu.GPUCombined) []float64) []components.SeriesData {
-		out := make([]components.SeriesData, len(gpus))
-		for i, g := range gpus {
-			out[i] = components.SeriesData{Label: g.Info.Label(), Values: values(g), Color: accentFor(g.Info.GPUNumber())}
+	metrics := trendMetrics(gpus)
+	chartW, twoColumn, _ := chartLayout(boxWidth, height, len(metrics))
+	zero := 0.0
+	render := func(chartH int) []string {
+		var charts []string
+		for _, m := range metrics {
+			top := m.top
+			series := make([]components.SeriesData, len(gpus))
+			for i, g := range gpus {
+				series[i] = components.SeriesData{Label: g.Info.Label(), Values: m.values(g), Color: accentFor(g.Info.GPUNumber())}
+			}
+			charts = append(charts, components.RenderMultiTimeSeriesChart(components.MultiChartOptions{
+				Title: m.title, Unit: m.unit, Width: chartW, Height: chartH,
+				FixedMin: &zero, FixedMax: &top, Series: series, Fill: fill,
+			}))
 		}
-		return out
+		return charts
 	}
-	maxOf := func(f func(*xpu.GPUCombined) float64) float64 {
-		m := 0.0
-		for _, g := range gpus {
-			m = math.Max(m, f(g))
-		}
-		return m
+	// Legends wrap to as many rows as the card count needs, so measure the
+	// tallest box at the minimum height and give the plots what is left.
+	const minH = 4
+	charts := render(minH)
+	overhead := 0
+	for _, c := range charts {
+		overhead = max(overhead, lipgloss.Height(c)-minH)
 	}
-	zero, pct := 0.0, 100.0
-	chart := func(title, unit string, top float64, values func(*xpu.GPUCombined) []float64) string {
-		return components.RenderMultiTimeSeriesChart(components.MultiChartOptions{
-			Title: title, Unit: unit, Width: chartW, Height: chartH,
-			FixedMin: &zero, FixedMax: &top, Series: series(values), Fill: fill,
-		})
-	}
-	var fans [][]float64
-	for _, g := range gpus {
-		fans = append(fans, g.History.FanRPM.Values())
-	}
-
-	power := chart("Power Draw", "W", maxOf(PowerLimitW), func(g *xpu.GPUCombined) []float64 { return g.History.PowerW.Values() })
-	core := chart("Core Temperature", "°C", maxOf(CoreTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.CoreTemp.Values()) })
-	vram := chart("VRAM Utilization", "%", pct, func(g *xpu.GPUCombined) []float64 { return g.History.MemoryUtil.Values() })
-	fan := chart("Fan Speed", "RPM", fanScale(fans...), func(g *xpu.GPUCombined) []float64 { return g.History.FanRPM.Values() })
-	mem := chart("Memory Temperature", "°C", maxOf(MemTempScale), func(g *xpu.GPUCombined) []float64 { return reported(g.History.MemoryTemp.Values()) })
-
+	rows := len(metrics)
 	if twoColumn {
-		return lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.JoinHorizontal(lipgloss.Top, power, "  ", core), "",
-			lipgloss.JoinHorizontal(lipgloss.Top, vram, "  ", fan), "",
-			mem)
+		rows = (rows + 1) / 2
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, power, "", core, "", vram, "", fan, "", mem)
+	if h := clamp((height-(rows-1))/rows-overhead, minH, 8); h > minH {
+		charts = render(h)
+	}
+	return layoutCharts(charts, twoColumn)
 }
 
 // renderGraphsView is one card's full charts, with axes and min/avg/max: the
@@ -284,267 +309,51 @@ func renderGraphsView(g *xpu.GPUCombined, boxWidth int, height int) string {
 	}
 	topRow := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
 
-	twoColumn := boxWidth >= 95
-	chartW := boxWidth
-	if twoColumn {
-		chartW = (boxWidth - 4) / 2
-	}
-
-	availH := height - 7
-	if availH < 12 {
-		availH = 12
-	}
-
-	chartH := 5
-	if availH >= 30 {
-		chartH = 7
-		if height >= 48 {
-			chartH = 8
-		}
-	} else if availH >= 22 {
-		chartH = 6
-	} else {
-		chartH = 4
-	}
-
-	limitW := PowerLimitW(g)
+	metrics := trendMetrics([]*xpu.GPUCombined{g})
+	chartW, twoColumn, chartH := chartLayout(boxWidth, height-2, len(metrics))
 	zero := 0.0
-
-	powerChart := components.RenderTimeSeriesChart(g.History.PowerW.Values(), components.ChartOptions{
-		Title:    g.Info.Label() + " Power Draw",
-		Unit:     "W",
-		Width:    chartW,
-		Height:   chartH,
-		Color:    gpuColor,
-		FixedMin: &zero,
-		FixedMax: &limitW,
-	})
-
-	tempMax := CoreTempScale(g)
-	coreTempChart := components.RenderTimeSeriesChart(g.History.CoreTemp.Values(), components.ChartOptions{
-		Title:    g.Info.Label() + " Core Temperature",
-		Unit:     "°C",
-		Width:    chartW,
-		Height:   chartH,
-		Color:    gpuColor,
-		FixedMin: &zero,
-		FixedMax: &tempMax,
-	})
-
-	pctMax := 100.0
-	vramChart := components.RenderTimeSeriesChart(g.History.MemoryUtil.Values(), components.ChartOptions{
-		Title:    g.Info.Label() + " VRAM Utilization",
-		Unit:     "%",
-		Width:    chartW,
-		Height:   chartH,
-		Color:    gpuColor,
-		FixedMin: &zero,
-		FixedMax: &pctMax,
-	})
-
-	fanMax := fanScale(g.History.FanRPM.Values())
-	fanChart := components.RenderTimeSeriesChart(g.History.FanRPM.Values(), components.ChartOptions{
-		Title:    g.Info.Label() + " Fan Speed",
-		Unit:     "RPM",
-		Width:    chartW,
-		Height:   chartH,
-		Color:    gpuColor,
-		FixedMin: &zero,
-		FixedMax: &fanMax,
-	})
-
-	memTempMax := MemTempScale(g) // the sensor's own crit; 95 pegged the chart ten degrees early
-	memTempChart := components.RenderTimeSeriesChart(g.History.MemoryTemp.Values(), components.ChartOptions{
-		Title:    g.Info.Label() + " Memory Temperature",
-		Unit:     "°C",
-		Width:    chartW,
-		Height:   chartH,
-		Color:    gpuColor,
-		FixedMin: &zero,
-		FixedMax: &memTempMax,
-	})
-
-	var chartLayout string
-	if twoColumn {
-		row1 := lipgloss.JoinHorizontal(lipgloss.Top, powerChart, "  ", coreTempChart)
-		row2 := lipgloss.JoinHorizontal(lipgloss.Top, vramChart, "  ", fanChart)
-		if availH >= 28 {
-			row3 := lipgloss.JoinHorizontal(lipgloss.Top, memTempChart)
-			chartLayout = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", row3)
-		} else {
-			chartLayout = lipgloss.JoinVertical(lipgloss.Left, row1, "", row2)
-		}
-	} else {
-		if availH >= 36 {
-			chartLayout = lipgloss.JoinVertical(lipgloss.Left, powerChart, "", coreTempChart, "", vramChart, "", fanChart, "", memTempChart)
-		} else if availH >= 24 {
-			chartLayout = lipgloss.JoinVertical(lipgloss.Left, powerChart, "", coreTempChart, "", vramChart)
-		} else {
-			chartLayout = lipgloss.JoinVertical(lipgloss.Left, powerChart, "", coreTempChart)
-		}
+	var charts []string
+	for _, m := range metrics {
+		top := m.top
+		charts = append(charts, components.RenderTimeSeriesChart(m.values(g), components.ChartOptions{
+			Title: g.Info.Label() + " " + m.title, Unit: m.unit, Width: chartW, Height: chartH,
+			Color: gpuColor, FixedMin: &zero, FixedMax: &top,
+		}))
 	}
-
-	return lipgloss.JoinVertical(lipgloss.Left, topRow, "", chartLayout)
+	return lipgloss.JoinVertical(lipgloss.Left, topRow, "", layoutCharts(charts, twoColumn))
 }
 
 // renderOverlaidDualGraphs is the overlay for exactly two cards: both filled,
 // striped where they overlap.
 func renderOverlaidDualGraphs(gpus []*xpu.GPUCombined, boxWidth int, height int) string {
-	g0 := gpus[0]
-	g1 := gpus[1]
+	g0, g1 := gpus[0], gpus[1]
 	if g0.History == nil || g1.History == nil {
 		return styles.CardStyle.Width(boxWidth + 2).Render(styles.MutedText.Render("No history yet."))
 	}
-
-	twoColumn := boxWidth >= 95
-	chartW := boxWidth
-	if twoColumn {
-		chartW = (boxWidth - 4) / 2
-	}
-
-	availH := height - 7
-	if availH < 12 {
-		availH = 12
-	}
-
-	chartH := 5
-	if availH >= 30 {
-		chartH = 7
-		if height >= 48 {
-			chartH = 8
-		}
-	} else if availH >= 22 {
-		chartH = 6
-	} else {
-		chartH = 4
-	}
-
+	metrics := trendMetrics(gpus)
+	chartW, twoColumn, chartH := chartLayout(boxWidth, height, len(metrics))
 	zero := 0.0
+	var charts []string
+	for _, m := range metrics {
+		top := m.top
+		charts = append(charts, components.RenderDualTimeSeriesChart(components.DualChartOptions{
+			Title: m.title, Unit: m.unit, Width: chartW, Height: chartH, FixedMin: &zero, FixedMax: &top,
+			Series0: components.SeriesData{Label: g0.Info.Label(), Values: m.values(g0), Color: accentFor(g0.Info.GPUNumber())},
+			Series1: components.SeriesData{Label: g1.Info.Label(), Values: m.values(g1), Color: accentFor(g1.Info.GPUNumber())},
+		}))
+	}
+	return layoutCharts(charts, twoColumn)
+}
 
-	colorGpu0 := styles.ColorGPU0 // Neon Cyan (#00F5FF)
-	colorGpu1 := styles.ColorGPU1 // Electric Violet (#E056FD)
-
-	// 1. Power Draw (W)
-	limitW := math.Max(PowerLimitW(g0), PowerLimitW(g1))
-	powerChart := components.RenderDualTimeSeriesChart(components.DualChartOptions{
-		Title:    "Power Draw",
-		Unit:     "W",
-		Width:    chartW,
-		Height:   chartH,
-		FixedMin: &zero,
-		FixedMax: &limitW,
-		Series0: components.SeriesData{
-			Label:  g0.Info.Label(),
-			Values: g0.History.PowerW.Values(),
-			Color:  colorGpu0,
-		},
-		Series1: components.SeriesData{
-			Label:  g1.Info.Label(),
-			Values: g1.History.PowerW.Values(),
-			Color:  colorGpu1,
-		},
-	})
-
-	// 2. Core Temperature (°C)
-	tempMax := math.Max(CoreTempScale(g0), CoreTempScale(g1))
-	coreTempChart := components.RenderDualTimeSeriesChart(components.DualChartOptions{
-		Title:    "Core Temperature",
-		Unit:     "°C",
-		Width:    chartW,
-		Height:   chartH,
-		FixedMin: &zero,
-		FixedMax: &tempMax,
-		Series0: components.SeriesData{
-			Label:  g0.Info.Label(),
-			Values: g0.History.CoreTemp.Values(),
-			Color:  colorGpu0,
-		},
-		Series1: components.SeriesData{
-			Label:  g1.Info.Label(),
-			Values: g1.History.CoreTemp.Values(),
-			Color:  colorGpu1,
-		},
-	})
-
-	// 3. VRAM Utilization (%)
-	pctMax := 100.0
-	vramChart := components.RenderDualTimeSeriesChart(components.DualChartOptions{
-		Title:    "VRAM Utilization",
-		Unit:     "%",
-		Width:    chartW,
-		Height:   chartH,
-		FixedMin: &zero,
-		FixedMax: &pctMax,
-		Series0: components.SeriesData{
-			Label:  g0.Info.Label(),
-			Values: g0.History.MemoryUtil.Values(),
-			Color:  colorGpu0,
-		},
-		Series1: components.SeriesData{
-			Label:  g1.Info.Label(),
-			Values: g1.History.MemoryUtil.Values(),
-			Color:  colorGpu1,
-		},
-	})
-
-	// 4. Fan Speed (RPM)
-	fanMax := fanScale(g0.History.FanRPM.Values(), g1.History.FanRPM.Values())
-	fanChart := components.RenderDualTimeSeriesChart(components.DualChartOptions{
-		Title:    "Fan Speed",
-		Unit:     "RPM",
-		Width:    chartW,
-		Height:   chartH,
-		FixedMin: &zero,
-		FixedMax: &fanMax,
-		Series0: components.SeriesData{
-			Label:  g0.Info.Label(),
-			Values: g0.History.FanRPM.Values(),
-			Color:  colorGpu0,
-		},
-		Series1: components.SeriesData{
-			Label:  g1.Info.Label(),
-			Values: g1.History.FanRPM.Values(),
-			Color:  colorGpu1,
-		},
-	})
-
-	// 5. Memory Temperature (°C)
-	memMax := math.Max(MemTempScale(g0), MemTempScale(g1))
-	memTempChart := components.RenderDualTimeSeriesChart(components.DualChartOptions{
-		Title:    "Memory Temperature",
-		Unit:     "°C",
-		Width:    chartW,
-		Height:   chartH,
-		FixedMin: &zero,
-		FixedMax: &memMax,
-		Series0: components.SeriesData{
-			Label:  g0.Info.Label(),
-			Values: g0.History.MemoryTemp.Values(),
-			Color:  colorGpu0,
-		},
-		Series1: components.SeriesData{
-			Label:  g1.Info.Label(),
-			Values: g1.History.MemoryTemp.Values(),
-			Color:  colorGpu1,
-		},
-	})
-
-	if twoColumn {
-		row1 := lipgloss.JoinHorizontal(lipgloss.Top, powerChart, "  ", coreTempChart)
-		row2 := lipgloss.JoinHorizontal(lipgloss.Top, vramChart, "  ", fanChart)
-		if availH >= 28 {
-			row3 := lipgloss.JoinHorizontal(lipgloss.Top, memTempChart)
-			return lipgloss.JoinVertical(lipgloss.Left, row1, "", row2, "", row3)
+// seriesPeak is the highest value across series.
+func seriesPeak(series ...[]float64) float64 {
+	peak := 0.0
+	for _, vs := range series {
+		for _, v := range vs {
+			peak = math.Max(peak, v)
 		}
-		return lipgloss.JoinVertical(lipgloss.Left, row1, "", row2)
 	}
-
-	if availH >= 36 {
-		return lipgloss.JoinVertical(lipgloss.Left, powerChart, "", coreTempChart, "", vramChart, "", fanChart, "", memTempChart)
-	} else if availH >= 24 {
-		return lipgloss.JoinVertical(lipgloss.Left, powerChart, "", coreTempChart, "", vramChart)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, powerChart, "", coreTempChart)
+	return peak
 }
 
 // fanScale is the fan chart's ceiling: the highest speed seen plus headroom,
